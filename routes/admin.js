@@ -582,6 +582,60 @@ router.post('/orders/:id/verify', (req, res) => {
     });
 });
 
+// Change Admin Password
+router.post('/change-password', async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Current and new passwords are required' });
+    }
+    
+    if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+    
+    const db = new sqlite3.Database(dbPath);
+    
+    // Get current admin password hash
+    db.get('SELECT password_hash FROM users WHERE role = "admin" LIMIT 1', async (err, user) => {
+        if (err) {
+            db.close();
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        if (!user) {
+            db.close();
+            return res.status(404).json({ error: 'Admin user not found' });
+        }
+        
+        try {
+            // Verify current password
+            const passwordMatch = await bcrypt.compare(currentPassword, user.password_hash);
+            if (!passwordMatch) {
+                db.close();
+                return res.status(401).json({ error: 'Current password is incorrect' });
+            }
+            
+            // Hash new password
+            const saltRounds = 10;
+            const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+            
+            // Update password
+            db.run('UPDATE users SET password_hash = ? WHERE role = "admin"', [newPasswordHash], function(err) {
+                db.close();
+                if (err) {
+                    return res.status(500).json({ error: 'Failed to update password' });
+                }
+                res.json({ success: true, message: 'Password changed successfully' });
+            });
+            
+        } catch (error) {
+            db.close();
+            res.status(500).json({ error: 'Password processing error' });
+        }
+    });
+});
+
 // Database Reset/Initialization
 router.post('/reset-database', (req, res) => {
     const db = new sqlite3.Database(dbPath);
