@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Church Retreat 2025</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand { font-weight: bold; }
+        .balance-badge { font-size: 1.1em; }
+        .transaction-item { border-left: 4px solid #007bff; padding-left: 10px; margin-bottom: 10px; }
+        .transaction-earn { border-left-color: #28a745; }
+        .transaction-spend { border-left-color: #dc3545; }
+    </style>
+</head>
+<body class="bg-light">
+    <%- include('../partials/navbar', { user: user }) %>
+
+    <main class="container mt-4">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Welcome, <%= user.username %>!</h5>
+                        <span class="badge bg-primary">$<%= user.balance %></span>
+                    </div>
+                    <div class="card-body">
+                        <% if (user.team_name) { %>
+                            <p><strong>Team:</strong> <%= user.team_name %></p>
+                        <% } %>
+                        
+                        <% if (user.role === 'team_leader') { %>
+                            <div class="alert alert-info">
+                                <strong>Team Leader:</strong> You can make purchases for your team in the store.
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <% if (user.role === 'admin') { %>
+                                My Recent Transactions
+                            <% } else if (user.team_id) { %>
+                                Team Recent Transactions
+                            <% } else { %>
+                                Recent Transactions
+                            <% } %>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <% if (transactions.length === 0) { %>
+                            <p class="text-muted">No transactions yet.</p>
+                        <% } else { %>
+                            <% transactions.forEach(transaction => { %>
+                                <div class="transaction-item <%= transaction.type === 'earn' || transaction.type === 'donation_received' ? 'transaction-earn' : 'transaction-spend' %>">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <strong><%= transaction.description %></strong>
+                                            <% if (user.team_id && user.role !== 'admin' && transaction.username) { %>
+                                                <br><small class="text-info">by <%= transaction.username %></small>
+                                            <% } %>
+                                            <br>
+                                            <small class="text-muted">
+                                                <%= formatDate(transaction.created_at) %>
+                                            </small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="<%= transaction.amount > 0 ? 'text-success' : 'text-danger' %>">
+                                                <%= transaction.amount > 0 ? '+' : '' %>$<%= Math.abs(transaction.amount) %>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }); %>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Redeem Code</h5>
+                    </div>
+                    <div class="card-body">
+                        <% if (user.role === 'team_leader' || user.role === 'admin') { %>
+                            <div id="redeem-alert"></div>
+                            <form id="redeemForm">
+                                <div class="mb-3">
+                                    <label for="code" class="form-label">Money Code</label>
+                                    <input type="text" class="form-control" id="code" name="code" placeholder="Enter code" required>
+                                </div>
+                                <button type="submit" class="btn btn-success w-100">Redeem</button>
+                            </form>
+                        <% } else { %>
+                            <div class="alert alert-warning">
+                                <h6>Team Leaders Only</h6>
+                                <p class="mb-0">Only team leaders can redeem money codes. Please ask your team leader to redeem codes for the team.</p>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Quick Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <a href="/store" class="btn btn-primary w-100 mb-2">Visit Store</a>
+                        <a href="/user/team" class="btn btn-outline-primary w-100 mb-2">View Team</a>
+                        <button class="btn btn-outline-secondary w-100" onclick="loadTransactions()">View All Transactions</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('redeemForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const response = await fetch('/user/redeem-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showRedeemAlert(`Successfully redeemed $${result.amount}! New balance: $${result.newBalance}`, 'success');
+                    document.getElementById('code').value = '';
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showRedeemAlert(result.error, 'danger');
+                }
+            } catch (error) {
+                showRedeemAlert('Network error', 'danger');
+            }
+        });
+        
+        function showRedeemAlert(message, type) {
+            const alertContainer = document.getElementById('redeem-alert');
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+        
+        async function loadTransactions() {
+            try {
+                const response = await fetch('/user/transactions');
+                const result = await response.json();
+                
+                if (result.transactions) {
+                    console.log('All transactions:', result.transactions);
+                }
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+            }
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/auth/logout', { method: 'POST' });
+                if (response.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

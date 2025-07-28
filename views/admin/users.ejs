@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - Church Retreat 2025</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand { font-weight: bold; }
+        .balance-badge { font-size: 1.1em; }
+    </style>
+</head>
+<body class="bg-light">
+    <%- include('../partials/navbar', { user: user }) %>
+
+    <main class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>User Management</h2>
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                        Create New User
+                    </button>
+                </div>
+                
+                <div id="users-alert"></div>
+                
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Team</th>
+                                        <th>Balance</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% users.forEach(userItem => { %>
+                                        <tr>
+                                            <td><%= userItem.username %></td>
+                                            <td>
+                                                <span class="badge bg-<%= userItem.role === 'admin' ? 'danger' : userItem.role === 'team_leader' ? 'success' : 'secondary' %>">
+                                                    <%= userItem.role.replace('_', ' ') %>
+                                                </span>
+                                            </td>
+                                            <td><%= userItem.team_name || 'Unassigned' %></td>
+                                            <td>$<%= userItem.balance %></td>
+                                            <td><%= formatDate(userItem.created_at) %></td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-secondary me-1" 
+                                                        onclick="editUser(<%= userItem.id %>, '<%= userItem.username %>', '<%= userItem.role %>', '<%= userItem.team_id || '' %>', <%= userItem.balance %>)">
+                                                    Edit
+                                                </button>
+                                                <% if (userItem.role !== 'admin') { %>
+                                                    <button class="btn btn-sm btn-outline-danger" 
+                                                            onclick="deleteUser(<%= userItem.id %>, '<%= userItem.username %>')">
+                                                        Delete
+                                                    </button>
+                                                <% } %>
+                                            </td>
+                                        </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create User Modal -->
+        <div class="modal fade" id="createUserModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create New User</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="createUserForm">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username</label>
+                                <input type="text" class="form-control" id="username" name="username" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="password" name="password" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="role" class="form-label">Role</label>
+                                <select class="form-select" id="role" name="role" required>
+                                    <option value="participant">Participant</option>
+                                    <option value="team_leader">Team Leader</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="team_id" class="form-label">Team (optional)</label>
+                                <select class="form-select" id="team_id" name="team_id">
+                                    <option value="">No team</option>
+                                    <option value="1">Alpha Team</option>
+                                    <option value="2">Beta Team</option>
+                                    <option value="3">Gamma Team</option>
+                                    <option value="4">Delta Team</option>
+                                    <option value="5">Echo Team</option>
+                                    <option value="6">Foxtrot Team</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-success" onclick="createUser()">Create User</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit User Modal -->
+        <div class="modal fade" id="editUserModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit User</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editUserForm">
+                            <input type="hidden" id="editUserId" name="userId">
+                            <div class="mb-3">
+                                <label for="editUsername" class="form-label">Username</label>
+                                <input type="text" class="form-control" id="editUsername" name="username" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="editPassword" class="form-label">Password (leave blank to keep current)</label>
+                                <input type="password" class="form-control" id="editPassword" name="password">
+                            </div>
+                            <div class="mb-3">
+                                <label for="editRole" class="form-label">Role</label>
+                                <select class="form-select" id="editRole" name="role" required>
+                                    <option value="participant">Participant</option>
+                                    <option value="team_leader">Team Leader</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="editTeamId" class="form-label">Team (optional)</label>
+                                <select class="form-select" id="editTeamId" name="team_id">
+                                    <option value="">No team</option>
+                                    <option value="1">Alpha Team</option>
+                                    <option value="2">Beta Team</option>
+                                    <option value="3">Gamma Team</option>
+                                    <option value="4">Delta Team</option>
+                                    <option value="5">Echo Team</option>
+                                    <option value="6">Foxtrot Team</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="editBalance" class="form-label">Balance ($)</label>
+                                <input type="number" class="form-control" id="editBalance" name="balance" min="0" step="1">
+                                <small class="text-muted">Current balance will be updated to this amount</small>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="updateUser()">Update User</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        async function createUser() {
+            const form = document.getElementById('createUserForm');
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+            
+            // Convert empty team_id to null
+            if (!data.team_id) delete data.team_id;
+            
+            try {
+                const response = await fetch('/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('User created successfully!', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
+                    form.reset();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert(result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Network error', 'danger');
+            }
+        }
+
+        function editUser(userId, username, role, teamId, balance) {
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editUsername').value = username;
+            document.getElementById('editPassword').value = '';
+            document.getElementById('editRole').value = role;
+            document.getElementById('editTeamId').value = teamId;
+            document.getElementById('editBalance').value = balance;
+            
+            new bootstrap.Modal(document.getElementById('editUserModal')).show();
+        }
+
+        async function updateUser() {
+            const form = document.getElementById('editUserForm');
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+            const userId = data.userId;
+            delete data.userId;
+            
+            // Convert empty team_id to null
+            if (!data.team_id) delete data.team_id;
+            
+            try {
+                const response = await fetch(`/admin/users/${userId}/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('User updated successfully!', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showAlert(result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Network error', 'danger');
+            }
+        }
+
+        async function deleteUser(userId, username) {
+            if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/admin/users/${userId}/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('User deleted successfully!', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert(result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Network error', 'danger');
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertContainer = document.getElementById('users-alert');
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/auth/logout', { method: 'POST' });
+                if (response.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

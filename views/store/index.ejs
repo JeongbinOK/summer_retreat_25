@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store - Church Retreat 2025</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand { font-weight: bold; }
+        .balance-badge { font-size: 1.1em; }
+    </style>
+</head>
+<body class="bg-light">
+    <%- include('../partials/navbar', { user: user }) %>
+
+    <main class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Store</h2>
+                    <div>
+                        <span class="badge bg-success fs-6">Your Balance: $<%= user.balance %></span>
+                        <% if (user.role !== 'team_leader' && user.role !== 'admin') { %>
+                            <span class="badge bg-warning fs-6 ms-2">Only team leaders can purchase</span>
+                        <% } %>
+                    </div>
+                </div>
+                
+                <div id="store-alert"></div>
+                
+                <% 
+                const categories = [...new Set(products.map(p => p.category))];
+                categories.forEach(category => { 
+                %>
+                    <div class="mb-4">
+                        <h4 class="text-capitalize"><%= category %>s</h4>
+                        <div class="row">
+                            <% 
+                            const categoryProducts = products.filter(p => p.category === category);
+                            categoryProducts.forEach(product => { 
+                            %>
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card h-100 <%= (product.stock_quantity || 0) <= 0 ? 'border-danger' : '' %>">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <h5 class="card-title"><%= product.name %></h5>
+                                                <% if ((product.stock_quantity || 0) <= 0) { %>
+                                                    <span class="badge bg-danger">SOLD OUT</span>
+                                                <% } else if ((product.stock_quantity || 0) <= 5) { %>
+                                                    <span class="badge bg-warning text-dark">Low Stock (<%= product.stock_quantity %>)</span>
+                                                <% } else { %>
+                                                    <span class="badge bg-success">In Stock (<%= product.stock_quantity %>)</span>
+                                                <% } %>
+                                            </div>
+                                            <p class="card-text"><%= product.description %></p>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="h5 text-primary">$<%= product.price %></span>
+                                                <% if ((product.stock_quantity || 0) <= 0) { %>
+                                                    <button class="btn btn-outline-danger" disabled>
+                                                        Sold Out
+                                                    </button>
+                                                <% } else if (user.role === 'team_leader' || user.role === 'admin') { %>
+                                                    <button class="btn btn-primary" 
+                                                            onclick="purchaseItem(<%= product.id %>, '<%= product.name %>', <%= product.price %>)"
+                                                            <%= user.balance < product.price ? 'disabled' : '' %>>
+                                                        <%= user.balance < product.price ? 'Insufficient Funds' : 'Purchase' %>
+                                                    </button>
+                                                <% } else { %>
+                                                    <button class="btn btn-outline-secondary" disabled>
+                                                        Leaders Only
+                                                    </button>
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }); %>
+                        </div>
+                    </div>
+                <% }); %>
+                
+                <% if (user.role === 'team_leader' || user.role === 'admin') { %>
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Team Donation System</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>As a team leader, you can donate specific products to other teams to help them!</p>
+                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#donationModal">
+                            Donate Product to Team
+                        </button>
+                    </div>
+                </div>
+                <% } %>
+            </div>
+        </div>
+
+        <!-- Purchase Confirmation Modal -->
+        <div class="modal fade" id="purchaseModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Confirm Purchase</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to purchase <strong id="purchaseItemName"></strong> for <strong id="purchaseItemPrice"></strong>?</p>
+                        <p>Your new balance will be: <strong id="newBalance"></strong></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="confirmPurchase">Confirm Purchase</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Donation Modal -->
+        <div class="modal fade" id="donationModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Donate Product to Team</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="donationForm">
+                            <div class="mb-3">
+                                <label for="recipientTeam" class="form-label">Recipient Team</label>
+                                <select class="form-select" id="recipientTeam" name="recipient_team_id" required>
+                                    <option value="">Select a team...</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="donationProduct" class="form-label">Product to donate</label>
+                                <select class="form-select" id="donationProduct" name="product_id" required>
+                                    <option value="">Select a product...</option>
+                                    <% products.filter(p => p.is_active).forEach(product => { %>
+                                        <option value="<%= product.id %>" data-price="<%= product.price %>">
+                                            <%= product.name %> - $<%= product.price %>
+                                        </option>
+                                    <% }); %>
+                                </select>
+                                <small class="text-muted">You can only donate items you already have in your team inventory.</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="donationQuantity" class="form-label">Quantity to donate</label>
+                                <input type="number" class="form-control" id="donationQuantity" name="quantity" min="1" value="1" required>
+                                <small class="text-muted" id="availableQuantityHelp">Select a product to see available quantity</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="donationMessage" class="form-label">Message (optional)</label>
+                                <textarea class="form-control" id="donationMessage" name="message" rows="2" placeholder="Share why you're donating this to the team..."></textarea>
+                            </div>
+                            <div class="alert alert-info">
+                                <strong>Your Balance:</strong> $<%= user.balance %>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-success" onclick="submitDonation()">Donate Product</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentPurchase = null;
+
+        let teamInventory = [];
+
+        // Load teams and inventory for donation (team leaders only)
+        document.addEventListener('DOMContentLoaded', async () => {
+            <% if (user.role === 'team_leader' || user.role === 'admin') { %>
+            try {
+                // Load teams
+                const teamsResponse = await fetch('/store/teams');
+                const teamsResult = await teamsResponse.json();
+                
+                if (teamsResult.teams) {
+                    const select = document.getElementById('recipientTeam');
+                    teamsResult.teams.forEach(team => {
+                        const option = document.createElement('option');
+                        option.value = team.id;
+                        option.textContent = team.name;
+                        select.appendChild(option);
+                    });
+                }
+
+                // Load team inventory
+                const inventoryResponse = await fetch('/store/team-inventory');
+                const inventoryResult = await inventoryResponse.json();
+                
+                if (inventoryResult.inventory) {
+                    teamInventory = inventoryResult.inventory;
+                    updateDonationProductOptions();
+                }
+            } catch (error) {
+                console.error('Error loading teams/inventory:', error);
+            }
+            <% } %>
+        });
+
+        function updateDonationProductOptions() {
+            const productSelect = document.getElementById('donationProduct');
+            const options = productSelect.querySelectorAll('option[value!=""]');
+            
+            options.forEach(option => {
+                const productId = parseInt(option.value);
+                const inventoryItem = teamInventory.find(item => item.product_id === productId);
+                
+                if (inventoryItem) {
+                    option.textContent = `${option.textContent.split(' (Available:')[0]} (Available: ${inventoryItem.available_quantity})`;
+                    option.disabled = false;
+                } else {
+                    option.textContent = `${option.textContent.split(' (Available:')[0]} (Not in inventory)`;
+                    option.disabled = true;
+                }
+            });
+        }
+
+        // Update quantity limits when product is selected
+        document.getElementById('donationProduct').addEventListener('change', function() {
+            const productId = parseInt(this.value);
+            const quantityInput = document.getElementById('donationQuantity');
+            const helpText = document.getElementById('availableQuantityHelp');
+            
+            if (productId) {
+                const inventoryItem = teamInventory.find(item => item.product_id === productId);
+                if (inventoryItem) {
+                    quantityInput.max = inventoryItem.available_quantity;
+                    quantityInput.value = Math.min(quantityInput.value, inventoryItem.available_quantity);
+                    helpText.textContent = `Available to donate: ${inventoryItem.available_quantity}`;
+                    helpText.className = 'text-muted';
+                } else {
+                    quantityInput.max = 0;
+                    quantityInput.value = 0;
+                    helpText.textContent = 'This item is not in your team inventory';
+                    helpText.className = 'text-danger';
+                }
+            } else {
+                quantityInput.max = '';
+                quantityInput.value = 1;
+                helpText.textContent = 'Select a product to see available quantity';
+                helpText.className = 'text-muted';
+            }
+        });
+
+        function purchaseItem(productId, productName, price) {
+            currentPurchase = { productId, productName, price };
+            
+            document.getElementById('purchaseItemName').textContent = productName;
+            document.getElementById('purchaseItemPrice').textContent = `$${price}`;
+            document.getElementById('newBalance').textContent = `$${<%= user.balance %> - price}`;
+            
+            new bootstrap.Modal(document.getElementById('purchaseModal')).show();
+        }
+
+        document.getElementById('confirmPurchase').addEventListener('click', async () => {
+            if (!currentPurchase) return;
+            
+            try {
+                const response = await fetch('/store/purchase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        product_id: currentPurchase.productId,
+                        quantity: 1
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStoreAlert(result.message, 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('purchaseModal')).hide();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showStoreAlert(result.error, 'danger');
+                }
+            } catch (error) {
+                showStoreAlert('Network error', 'danger');
+            }
+        });
+
+        async function submitDonation() {
+            const form = document.getElementById('donationForm');
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+            
+            // Validate that team has enough inventory
+            const productId = parseInt(data.product_id);
+            const quantity = parseInt(data.quantity);
+            const inventoryItem = teamInventory.find(item => item.product_id === productId);
+            
+            if (!inventoryItem) {
+                showStoreAlert('This item is not in your team inventory', 'danger');
+                return;
+            }
+            
+            if (quantity > inventoryItem.available_quantity) {
+                showStoreAlert(`You only have ${inventoryItem.available_quantity} of this item available`, 'danger');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/store/donate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStoreAlert(result.message, 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('donationModal')).hide();
+                    form.reset();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showStoreAlert(result.error, 'danger');
+                }
+            } catch (error) {
+                showStoreAlert('Network error', 'danger');
+            }
+        }
+
+        function showStoreAlert(message, type) {
+            const alertContainer = document.getElementById('store-alert');
+            alertContainer.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/auth/logout', { method: 'POST' });
+                if (response.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

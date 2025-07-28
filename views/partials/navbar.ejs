@@ -1,0 +1,31 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+        <a class="navbar-brand" href="/">Church Retreat 2025</a>
+        
+        <% if (typeof user !== 'undefined' && user) { %>
+            <div class="navbar-nav me-auto">
+                <% if (user.role === 'admin') { %>
+                    <a class="nav-link" href="/admin/dashboard">Admin</a>
+                    <a class="nav-link" href="/admin/users">Users</a>
+                    <a class="nav-link" href="/admin/teams">Teams</a>
+                    <a class="nav-link" href="/admin/products">Products</a>
+                    <a class="nav-link" href="/admin/orders">Orders</a>
+                    <a class="nav-link" href="/admin/money-codes">Money Codes</a>
+                <% } else { %>
+                    <a class="nav-link" href="/user/dashboard">Dashboard</a>
+                    <a class="nav-link" href="/store">Store</a>
+                    <a class="nav-link" href="/user/team">My Team</a>
+                <% } %>
+            </div>
+            
+            <div class="d-flex align-items-center">
+                <span class="badge bg-success balance-badge me-3">$<%= user.balance %></span>
+                <span class="text-white me-3">
+                    <%= user.username %> 
+                    <% if (user.team_name) { %>(<%= user.team_name %>)<% } %>
+                </span>
+                <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+            </div>
+        <% } %>
+    </div>
+</nav>
