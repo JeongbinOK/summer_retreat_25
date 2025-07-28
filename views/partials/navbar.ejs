@@ -1,30 +1,38 @@
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(45deg, #667eea, #764ba2);">
     <div class="container">
-        <a class="navbar-brand" href="/">Church Retreat 2025</a>
+        <a class="navbar-brand" href="/" style="font-family: 'Noto Serif KR', serif; font-weight: 600; font-size: 1.3rem;">
+            2025 말씀교회 여름수련회
+            <small class="d-block" style="font-size: 0.7rem; opacity: 0.9; font-family: 'Noto Sans KR', sans-serif; font-weight: 400;">
+                2025.07.31 - 08.02
+            </small>
+        </a>
         
         <% if (typeof user !== 'undefined' && user) { %>
             <div class="navbar-nav me-auto">
                 <% if (user.role === 'admin') { %>
-                    <a class="nav-link" href="/admin/dashboard">Admin</a>
-                    <a class="nav-link" href="/admin/users">Users</a>
-                    <a class="nav-link" href="/admin/teams">Teams</a>
-                    <a class="nav-link" href="/admin/products">Products</a>
-                    <a class="nav-link" href="/admin/orders">Orders</a>
-                    <a class="nav-link" href="/admin/money-codes">Money Codes</a>
+                    <a class="nav-link" href="/admin/dashboard">🎛️ 관리자</a>
+                    <a class="nav-link" href="/admin/users">👥 사용자</a>
+                    <a class="nav-link" href="/admin/teams">⭐ 팀 관리</a>
+                    <a class="nav-link" href="/admin/products">🛍️ 상품</a>
+                    <a class="nav-link" href="/admin/orders">📋 주문</a>
+                    <a class="nav-link" href="/admin/money-codes">💰 머니코드</a>
                 <% } else { %>
-                    <a class="nav-link" href="/user/dashboard">Dashboard</a>
-                    <a class="nav-link" href="/store">Store</a>
-                    <a class="nav-link" href="/user/team">My Team</a>
+                    <a class="nav-link" href="/user/dashboard">🏠 대시보드</a>
+                    <a class="nav-link" href="/store">🏪 상점</a>
+                    <a class="nav-link" href="/user/team">👫 내 팀</a>
                 <% } %>
             </div>
             
             <div class="d-flex align-items-center">
-                <span class="badge bg-success balance-badge me-3">$<%= user.balance %></span>
-                <span class="text-white me-3">
+                <span class="badge bg-success balance-badge me-3">💰 $<%= user.balance %></span>
+                <span class="text-white me-3" style="font-family: 'Noto Sans KR', sans-serif;">
                     <%= user.username %> 
                     <% if (user.team_name) { %>(<%= user.team_name %>)<% } %>
                 </span>
-                <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+                <button class="btn btn-outline-light" onclick="logout()" style="font-family: 'Noto Sans KR', sans-serif;">
+                    🚪 로그아웃
+                </button>
             </div>
         <% } %>
     </div>

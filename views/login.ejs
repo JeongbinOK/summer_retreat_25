@@ -1,33 +1,105 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Church Retreat 2025</title>
+    <title>로그인 - 2025 말씀교회 여름수련회</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .retreat-card {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 15px;
+        }
+        .retreat-title {
+            font-family: 'Noto Serif KR', serif;
+            font-weight: 600;
+            color: #2c3e50;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        .retreat-date {
+            color: #34495e;
+            font-weight: 500;
+        }
+        .bible-verse {
+            font-family: 'Noto Serif KR', serif;
+            color: #8b5cf6;
+            font-style: italic;
+            border-left: 3px solid #8b5cf6;
+            padding-left: 15px;
+            margin: 20px 0;
+            background: rgba(139, 92, 246, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .login-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            font-weight: 500;
+        }
+        .login-btn:hover {
+            background: linear-gradient(45deg, #5a67d8, #6b46c1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+    </style>
 </head>
-<body class="bg-light">
+<body>
     <div class="container">
-        <div class="row justify-content-center mt-5">
-            <div class="col-md-6 col-lg-4">
-                <div class="card shadow">
-                    <div class="card-body">
-                        <h2 class="card-title text-center mb-4">Church Retreat 2025</h2>
+        <div class="row justify-content-center" style="padding-top: 8vh;">
+            <div class="col-md-8 col-lg-6">
+                <div class="card retreat-card shadow-lg">
+                    <div class="card-body p-5">
+                        <!-- Main Title -->
+                        <h1 class="retreat-title text-center mb-2" style="font-size: 2.2rem;">
+                            2025 말씀교회 여름수련회
+                        </h1>
+                        
+                        <!-- Date -->
+                        <p class="retreat-date text-center mb-4" style="font-size: 1.1rem;">
+                            📅 2025.07.31 - 2025.08.02
+                        </p>
+                        
+                        <!-- Bible Verse -->
+                        <div class="bible-verse text-center">
+                            <p class="mb-2" style="font-size: 1.1rem; font-weight: 500;">
+                                "그리스도의 말씀이 너희 속에 풍성히 거하여<br>
+                                모든 지혜로 피차 가르치며 권면하고<br>
+                                시와 찬송과 신령한 노래를 부르며<br>
+                                감사하는 마음으로 하나님을 찬양하고"
+                            </p>
+                            <p class="mb-0" style="font-weight: 600; color: #2c3e50;">
+                                - 골로새서 3장 16절 -
+                            </p>
+                        </div>
+                        
+                        <hr class="my-4" style="border-color: #8b5cf6; opacity: 0.3;">
                         
                         <div id="alert-container"></div>
                         
                         <form id="loginForm">
                             <div class="mb-3">
-                                <label for="username" class="form-label">Username</label>
-                                <input type="text" class="form-control" id="username" name="username" required>
+                                <label for="username" class="form-label" style="font-weight: 500;">사용자명</label>
+                                <input type="text" class="form-control" id="username" name="username" required 
+                                       style="border-radius: 8px; border-color: #e1e5e9;">
                             </div>
                             
-                            <div class="mb-3">
-                                <label for="password" class="form-label">Password</label>
-                                <input type="password" class="form-control" id="password" name="password" required>
+                            <div class="mb-4">
+                                <label for="password" class="form-label" style="font-weight: 500;">비밀번호</label>
+                                <input type="password" class="form-control" id="password" name="password" required
+                                       style="border-radius: 8px; border-color: #e1e5e9;">
                             </div>
                             
-                            <button type="submit" class="btn btn-primary w-100">Login</button>
+                            <button type="submit" class="btn login-btn w-100 py-3" style="border-radius: 8px; font-size: 1.1rem; transition: all 0.3s ease;">
+                                🚪 로그인
+                            </button>
                         </form>
                         
                     </div>
