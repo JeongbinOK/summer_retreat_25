@@ -13,11 +13,11 @@ app.use(express.static('public'));
 
 // Session configuration
 app.use(session({
-    secret: 'retreat-2025-secret-key',
+    secret: process.env.SESSION_SECRET || 'retreat-2025-secret-key',
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: false, // Set to true in production with HTTPS
+        secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));

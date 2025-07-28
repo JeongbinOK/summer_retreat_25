@@ -1,6 +1,13 @@
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcrypt');
 const path = require('path');
+const fs = require('fs');
+
+// Ensure database directory exists
+const dbDir = __dirname;
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+}
 
 const dbPath = path.join(__dirname, 'retreat.db');
 
