@@ -107,8 +107,7 @@ async function startServer() {
         console.log('Database initialized successfully');
         
         app.listen(PORT, () => {
-            console.log(`Server running on http://localhost:${PORT}`);
-            console.log('Default admin credentials: admin / admin123');
+            console.log(`Server running on port ${PORT}`);
         });
     } catch (error) {
         console.error('Failed to initialize database:', error);
