@@ -127,10 +127,18 @@ async function createInitialData() {
     return new Promise((resolve, reject) => {
         db.serialize(async () => {
             try {
-                // Create admin user
+                // Create or update admin user (ensures password is always current)
                 const adminPassword = await bcrypt.hash('akftmaryghl', 10);
-                db.run(`INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?, ?, ?)`,
-                    ['admin', adminPassword, 'admin']);
+                db.run(`INSERT OR REPLACE INTO users (id, username, password_hash, role, balance, created_at) 
+                        VALUES (
+                            (SELECT id FROM users WHERE username = 'admin'), 
+                            'admin', 
+                            ?, 
+                            'admin', 
+                            COALESCE((SELECT balance FROM users WHERE username = 'admin'), 0),
+                            COALESCE((SELECT created_at FROM users WHERE username = 'admin'), CURRENT_TIMESTAMP)
+                        )`,
+                    [adminPassword]);
                 
                 // Create sample teams
                 const teams = [
