@@ -11,12 +11,23 @@ let db;
 if (isProduction && process.env.DATABASE_URL) {
     // PostgreSQL for production (Render)
     console.log('🗄️ Using PostgreSQL database for production');
+    console.log('📡 Connecting to:', process.env.DATABASE_URL.split('@')[1]); // Log only host part for security
+    
     db = new Pool({
         connectionString: process.env.DATABASE_URL,
-        ssl: {
+        ssl: process.env.DATABASE_URL.includes('localhost') ? false : {
             rejectUnauthorized: false
-        }
+        },
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
     });
+    
+    // Test connection
+    db.on('error', (err) => {
+        console.error('❌ PostgreSQL connection error:', err);
+    });
+    
 } else {
     // SQLite for development
     console.log('🗄️ Using SQLite database for development');
@@ -90,8 +101,8 @@ class Database {
                         reject(err);
                     } else {
                         resolve({
-                            lastID: result.insertId,
-                            changes: result.rowCount
+                            lastID: result.insertId || null,
+                            changes: result.rowCount || 0
                         });
                     }
                 });
