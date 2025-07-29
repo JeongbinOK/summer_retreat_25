@@ -128,7 +128,7 @@ async function createInitialData() {
         db.serialize(async () => {
             try {
                 // Create admin user
-                const adminPassword = await bcrypt.hash('admin123', 10);
+                const adminPassword = await bcrypt.hash('akftmaryghl', 10);
                 db.run(`INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?, ?, ?)`,
                     ['admin', adminPassword, 'admin']);
                 
