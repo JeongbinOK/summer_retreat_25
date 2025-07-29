@@ -1,22 +1,22 @@
 -- PostgreSQL schema for Church Summer Retreat 2025
 -- This file contains the database schema converted from SQLite to PostgreSQL
 
--- Teams table
-CREATE TABLE IF NOT EXISTS teams (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    leader_id INTEGER REFERENCES users(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Users table
+-- Users table (create first, no foreign keys initially)
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(20) DEFAULT 'participant' CHECK (role IN ('admin', 'team_leader', 'participant')),
-    team_id INTEGER REFERENCES teams(id),
+    team_id INTEGER,
     balance INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Teams table (create second, can reference users now)
+CREATE TABLE IF NOT EXISTS teams (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    leader_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -93,6 +93,49 @@ CREATE TABLE IF NOT EXISTS donations (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Add foreign key constraints after all tables are created
+ALTER TABLE teams ADD CONSTRAINT fk_teams_leader 
+    FOREIGN KEY (leader_id) REFERENCES users(id);
+
+ALTER TABLE users ADD CONSTRAINT fk_users_team 
+    FOREIGN KEY (team_id) REFERENCES teams(id);
+
+ALTER TABLE orders ADD CONSTRAINT fk_orders_user 
+    FOREIGN KEY (user_id) REFERENCES users(id);
+
+ALTER TABLE orders ADD CONSTRAINT fk_orders_team 
+    FOREIGN KEY (team_id) REFERENCES teams(id);
+
+ALTER TABLE orders ADD CONSTRAINT fk_orders_product 
+    FOREIGN KEY (product_id) REFERENCES products(id);
+
+ALTER TABLE transactions ADD CONSTRAINT fk_transactions_user 
+    FOREIGN KEY (user_id) REFERENCES users(id);
+
+ALTER TABLE money_codes ADD CONSTRAINT fk_money_codes_user 
+    FOREIGN KEY (used_by) REFERENCES users(id);
+
+ALTER TABLE team_inventory ADD CONSTRAINT fk_team_inventory_team 
+    FOREIGN KEY (team_id) REFERENCES teams(id);
+
+ALTER TABLE team_inventory ADD CONSTRAINT fk_team_inventory_product 
+    FOREIGN KEY (product_id) REFERENCES products(id);
+
+ALTER TABLE donations ADD CONSTRAINT fk_donations_donor 
+    FOREIGN KEY (donor_id) REFERENCES users(id);
+
+ALTER TABLE donations ADD CONSTRAINT fk_donations_recipient 
+    FOREIGN KEY (recipient_id) REFERENCES users(id);
+
+ALTER TABLE donations ADD CONSTRAINT fk_donations_donor_team 
+    FOREIGN KEY (donor_team_id) REFERENCES teams(id);
+
+ALTER TABLE donations ADD CONSTRAINT fk_donations_recipient_team 
+    FOREIGN KEY (recipient_team_id) REFERENCES teams(id);
+
+ALTER TABLE donations ADD CONSTRAINT fk_donations_product 
+    FOREIGN KEY (product_id) REFERENCES products(id);
+
 -- Insert initial teams (Korean names)
 INSERT INTO teams (name) VALUES 
     ('A그룹'),
@@ -103,7 +146,7 @@ INSERT INTO teams (name) VALUES
     ('F그룹')
 ON CONFLICT DO NOTHING;
 
--- Insert admin user (password: admin123)
+-- Insert admin user (password: akftmaryghl)
 INSERT INTO users (username, password_hash, role, balance) VALUES 
     ('admin', '$2b$10$8vF0qGqyGJWWqO5HXaQ8KO7pB5fM5fB5xM5aQ5eM5tO5wQ5zO5yM5u', 'admin', 0)
 ON CONFLICT (username) DO NOTHING;

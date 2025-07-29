@@ -50,14 +50,26 @@ class UniversalDatabase {
         const statements = schema.split(';').filter(stmt => stmt.trim().length > 0);
         
         for (const statement of statements) {
+            const cleanStatement = statement.trim();
+            if (cleanStatement.length === 0) continue;
+            
             try {
-                await this.db.query(statement.trim());
+                await this.db.query(cleanStatement);
+                console.log('✅ Executed:', cleanStatement.substring(0, 50) + '...');
             } catch (error) {
-                // Ignore "already exists" errors
-                if (!error.message.includes('already exists') && 
-                    !error.message.includes('duplicate key') &&
-                    !error.message.includes('ON CONFLICT')) {
-                    console.warn('PostgreSQL statement warning:', error.message);
+                // Ignore specific expected errors
+                if (error.message.includes('already exists') || 
+                    error.message.includes('duplicate key') ||
+                    error.message.includes('ON CONFLICT') ||
+                    error.message.includes('constraint') ||
+                    error.code === '42P07' || // relation already exists
+                    error.code === '23505' || // unique violation
+                    error.code === '42710') { // object already exists
+                    console.log('⚠️ Skipped (already exists):', cleanStatement.substring(0, 50) + '...');
+                } else {
+                    console.error('❌ SQL Error:', error.message);
+                    console.error('📝 Statement:', cleanStatement.substring(0, 100));
+                    throw error; // Re-throw unexpected errors
                 }
             }
         }
@@ -208,12 +220,18 @@ class UniversalDatabase {
             
             if (isProduction) {
                 // PostgreSQL: Use ON CONFLICT for upsert
-                await this.db.query(`
-                    INSERT INTO users (username, password_hash, role, balance) 
-                    VALUES ($1, $2, 'admin', 0)
-                    ON CONFLICT (username) 
-                    DO UPDATE SET password_hash = $2
-                `, ['admin', adminPassword]);
+                try {
+                    await this.db.query(`
+                        INSERT INTO users (username, password_hash, role, balance) 
+                        VALUES ($1, $2, 'admin', 0)
+                        ON CONFLICT (username) 
+                        DO UPDATE SET password_hash = $2
+                    `, ['admin', adminPassword]);
+                    console.log('✅ Admin user created/updated');
+                } catch (error) {
+                    console.error('❌ Error creating admin user:', error.message);
+                    throw error;
+                }
             } else {
                 // SQLite: Use INSERT OR REPLACE
                 await this.db.run(`
