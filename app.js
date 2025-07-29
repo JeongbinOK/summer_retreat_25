@@ -1,7 +1,7 @@
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
-const { createInitialData } = require('./database/init');
+const { initDatabase } = require('./database/init_universal');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -104,12 +104,12 @@ app.get('/dashboard', requireAuth, (req, res) => {
 // Initialize database and start server
 async function startServer() {
     try {
-        await createInitialData();
-        console.log('Database initialized successfully');
+        await initDatabase();
         
         app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
-            console.log('Admin password updated in init.js');
+            console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Production)' : 'SQLite (Development)'}`);
         });
     } catch (error) {
         console.error('Failed to initialize database:', error);
