@@ -41,12 +41,22 @@ class Database {
         this.isPostgres = isProduction && process.env.DATABASE_URL;
     }
 
+    // Convert SQLite placeholders (?) to PostgreSQL placeholders ($1, $2, ...)
+    convertSqlForPostgres(sql, params) {
+        if (!this.isPostgres) return { sql, params };
+        
+        let paramIndex = 1;
+        const convertedSql = sql.replace(/\?/g, () => `$${paramIndex++}`);
+        return { sql: convertedSql, params };
+    }
+
     // Execute a query
     async query(sql, params = []) {
         return new Promise((resolve, reject) => {
             if (this.isPostgres) {
-                // PostgreSQL
-                db.query(sql, params, (err, result) => {
+                // PostgreSQL - convert ? to $1, $2, etc.
+                const { sql: convertedSql, params: convertedParams } = this.convertSqlForPostgres(sql, params);
+                db.query(convertedSql, convertedParams, (err, result) => {
                     if (err) {
                         reject(err);
                     } else {
@@ -70,8 +80,9 @@ class Database {
     async get(sql, params = []) {
         return new Promise((resolve, reject) => {
             if (this.isPostgres) {
-                // PostgreSQL
-                db.query(sql, params, (err, result) => {
+                // PostgreSQL - convert ? to $1, $2, etc.
+                const { sql: convertedSql, params: convertedParams } = this.convertSqlForPostgres(sql, params);
+                db.query(convertedSql, convertedParams, (err, result) => {
                     if (err) {
                         reject(err);
                     } else {
@@ -95,8 +106,9 @@ class Database {
     async run(sql, params = []) {
         return new Promise((resolve, reject) => {
             if (this.isPostgres) {
-                // PostgreSQL
-                db.query(sql, params, (err, result) => {
+                // PostgreSQL - convert ? to $1, $2, etc.
+                const { sql: convertedSql, params: convertedParams } = this.convertSqlForPostgres(sql, params);
+                db.query(convertedSql, convertedParams, (err, result) => {
                     if (err) {
                         reject(err);
                     } else {
