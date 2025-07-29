@@ -677,13 +677,46 @@ router.post('/reset-database', (req, res) => {
             if (err) console.log('Error deleting products:', err.message);
         });
         
-        // Reset teams (remove leaders)
+        // Reset teams (remove leaders and update names)
         db.run('UPDATE teams SET leader_id = NULL', (err) => {
             if (err) console.log('Error resetting team leaders:', err.message);
-            
-            db.close();
-            res.json({ success: true, message: 'Database reset to initial values successfully' });
         });
+        
+        // Update team names to current Korean names
+        const teamUpdates = [
+            { id: 1, name: 'A그룹' },
+            { id: 2, name: 'B그룹' },
+            { id: 3, name: 'C그룹' },
+            { id: 4, name: 'D그룹' },
+            { id: 5, name: 'E그룹' },
+            { id: 6, name: 'F그룹' }
+        ];
+        
+        let completed = 0;
+        teamUpdates.forEach(team => {
+            db.run('UPDATE teams SET name = ? WHERE id = ?', [team.name, team.id], (err) => {
+                if (err) console.log(`Error updating team ${team.id}:`, err.message);
+                
+                completed++;
+                if (completed === teamUpdates.length) {
+                    db.close();
+                    res.json({ success: true, message: 'Database reset to initial values successfully' });
+                }
+            });
+        });
+    });
+});
+
+// API endpoint to get all teams (for dynamic dropdowns)
+router.get('/api/teams', (req, res) => {
+    const db = new sqlite3.Database(dbPath);
+    
+    db.all('SELECT id, name FROM teams ORDER BY id', (err, teams) => {
+        db.close();
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json({ teams });
     });
 });
 

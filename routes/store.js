@@ -163,27 +163,27 @@ router.get('/orders', (req, res) => {
     });
 });
 
-// Donation feature - Team leaders only, team-to-team product donations
+// NEW Donation System - Purchase from store and donate to team
 router.post('/donate', (req, res) => {
     const { recipient_team_id, product_id, quantity = 1, message } = req.body;
     
     // Check if user is team leader
     if (req.session.user.role !== 'team_leader' && req.session.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Only team leaders can make donations' });
+        return res.status(403).json({ error: '팀 리더만 기부할 수 있습니다' });
     }
     
     if (!recipient_team_id || !product_id || !quantity || quantity <= 0) {
-        return res.status(400).json({ error: 'Recipient team, product, and valid quantity required' });
+        return res.status(400).json({ error: '받는 팀, 상품, 수량을 모두 입력해주세요' });
     }
     
-    if (recipient_team_id === req.session.user.team_id) {
-        return res.status(400).json({ error: 'Cannot donate to your own team' });
+    if (recipient_team_id == req.session.user.team_id) {
+        return res.status(400).json({ error: '자신의 팀에게는 기부할 수 없습니다' });
     }
     
     const db = new sqlite3.Database(dbPath);
     
     db.serialize(() => {
-        // Check if product exists
+        // Check if product exists and has stock
         db.get('SELECT * FROM products WHERE id = ? AND is_active = 1', [product_id], (err, product) => {
             if (err) {
                 db.close();
@@ -192,110 +192,128 @@ router.post('/donate', (req, res) => {
             
             if (!product) {
                 db.close();
-                return res.status(404).json({ error: 'Product not found or inactive' });
+                return res.status(404).json({ error: '상품을 찾을 수 없거나 비활성 상태입니다' });
             }
             
-            // Check if donor team has enough of this item in inventory
-            db.get('SELECT SUM(quantity) as total_quantity FROM team_inventory WHERE team_id = ? AND product_id = ?', 
-                [req.session.user.team_id, product_id], (err, inventoryResult) => {
+            if (product.stock_quantity < quantity) {
+                db.close();
+                return res.status(400).json({ error: `재고가 부족합니다. 현재 재고: ${product.stock_quantity}개` });
+            }
+            
+            const totalCost = product.price * quantity;
+            
+            // Check if donor has enough balance
+            if (req.session.user.balance < totalCost) {
+                db.close();
+                return res.status(400).json({ error: `잔액이 부족합니다. 필요: $${totalCost}, 보유: $${req.session.user.balance}` });
+            }
+            
+            // Check if recipient team exists
+            db.get('SELECT id, name FROM teams WHERE id = ?', [recipient_team_id], (err, recipientTeam) => {
                 if (err) {
                     db.close();
                     return res.status(500).json({ error: 'Database error' });
                 }
                 
-                const availableQuantity = inventoryResult.total_quantity || 0;
-                if (availableQuantity < quantity) {
+                if (!recipientTeam) {
                     db.close();
-                    return res.status(400).json({ 
-                        error: `Insufficient inventory. You have ${availableQuantity} ${product.name}(s), but trying to donate ${quantity}` 
-                    });
+                    return res.status(404).json({ error: '받는 팀을 찾을 수 없습니다' });
                 }
                 
-                // Check if recipient team exists
-                db.get('SELECT id, name FROM teams WHERE id = ?', [recipient_team_id], (err, recipientTeam) => {
+                // Get recipient team leader
+                db.get('SELECT id FROM users WHERE team_id = ? AND role = "team_leader"', [recipient_team_id], (err, recipientLeader) => {
                     if (err) {
                         db.close();
                         return res.status(500).json({ error: 'Database error' });
                     }
                     
-                    if (!recipientTeam) {
-                        db.close();
-                        return res.status(404).json({ error: 'Recipient team not found' });
-                    }
-                    
-                    // Get recipient team leader
-                    db.get('SELECT id FROM users WHERE team_id = ? AND role = "team_leader"', [recipient_team_id], (err, recipientLeader) => {
+                    // Begin transaction
+                    db.run('BEGIN TRANSACTION', (err) => {
                         if (err) {
                             db.close();
-                            return res.status(500).json({ error: 'Database error' });
+                            return res.status(500).json({ error: 'Transaction error' });
                         }
                         
-                        if (!recipientLeader) {
-                            db.close();
-                            return res.status(404).json({ error: 'Recipient team has no leader' });
-                        }
-                        
-                        // Create donation record
-                        db.run('INSERT INTO donations (donor_id, recipient_id, product_id, amount, quantity, message, donor_team_id, recipient_team_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                            [req.session.user.id, recipientLeader.id, product_id, product.price * quantity, quantity, message || '', req.session.user.team_id, recipient_team_id], function(err) {
+                        // 1. Deduct money from donor's balance
+                        db.run('UPDATE users SET balance = balance - ? WHERE id = ?',
+                            [totalCost, req.session.user.id], (err) => {
                             if (err) {
+                                db.run('ROLLBACK');
                                 db.close();
-                                return res.status(500).json({ error: 'Database error' });
+                                return res.status(500).json({ error: '잔액 차감 실패' });
                             }
                             
-                            const donationId = this.lastID;
-                            
-                            // Remove items from donor team inventory
-                            db.run('UPDATE team_inventory SET quantity = quantity - ? WHERE team_id = ? AND product_id = ? AND quantity > 0',
-                                [quantity, req.session.user.team_id, product_id], (err) => {
+                            // 2. Decrease product stock
+                            db.run('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+                                [quantity, product_id], (err) => {
                                 if (err) {
+                                    db.run('ROLLBACK');
                                     db.close();
-                                    return res.status(500).json({ error: 'Database error removing from inventory' });
+                                    return res.status(500).json({ error: '재고 업데이트 실패' });
                                 }
                                 
-                                // Add items to recipient team inventory
-                                db.run('INSERT INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id) VALUES (?, ?, ?, ?, ?)',
-                                    [recipient_team_id, product_id, quantity, 'donation', donationId], (err) => {
+                                // 3. Add to recipient team inventory
+                                db.run(`INSERT OR REPLACE INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id) 
+                                        VALUES (?, ?, COALESCE((SELECT quantity FROM team_inventory WHERE team_id = ? AND product_id = ?), 0) + ?, 'donation', ?)`,
+                                    [recipient_team_id, product_id, recipient_team_id, product_id, quantity, 0], (err) => {
                                     if (err) {
+                                        db.run('ROLLBACK');
                                         db.close();
-                                        return res.status(500).json({ error: 'Database error adding to recipient inventory' });
+                                        return res.status(500).json({ error: '인벤토리 업데이트 실패' });
                                     }
                                     
-                                    // Decrease product stock (as items are being transferred/consumed)
-                                    db.run('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-                                        [quantity, product_id], (err) => {
+                                    // 4. Create donation record
+                                    db.run('INSERT INTO donations (donor_id, recipient_id, product_id, amount, quantity, message, donor_team_id, recipient_team_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                        [req.session.user.id, recipientLeader?.id, product_id, totalCost, quantity, message || '', req.session.user.team_id, recipient_team_id], 
+                                        function(err) {
                                         if (err) {
-                                            console.log('Error decreasing stock for donation:', err.message);
+                                            db.run('ROLLBACK');
+                                            db.close();
+                                            return res.status(500).json({ error: '기부 기록 생성 실패' });
                                         }
                                         
-                                        // Check if product is now out of stock and auto-deactivate
-                                        db.get('SELECT stock_quantity FROM products WHERE id = ?', [product_id], (err, updatedProduct) => {
-                                            if (!err && updatedProduct && updatedProduct.stock_quantity <= 0) {
-                                                db.run('UPDATE products SET is_active = 0 WHERE id = ?', [product_id]);
+                                        const donationId = this.lastID;
+                                        
+                                        // 5. Record transaction for donor (spending money)
+                                        db.run('INSERT INTO transactions (user_id, type, amount, description, reference_id) VALUES (?, ?, ?, ?, ?)',
+                                            [req.session.user.id, 'donation_sent', -totalCost, `${recipientTeam.name}에게 ${product.name} ${quantity}개 기부 (상점에서 구매)`, donationId], (err) => {
+                                            if (err) {
+                                                console.log('Error recording donor transaction:', err.message);
                                             }
+                                            
+                                            // 6. Record transaction for recipient (if leader found)
+                                            if (recipientLeader) {
+                                                db.run('INSERT INTO transactions (user_id, type, amount, description, reference_id) VALUES (?, ?, ?, ?, ?)',
+                                                    [recipientLeader.id, 'donation_received', 0, `${req.session.user.team_name || 'Unknown'}팀으로부터 ${product.name} ${quantity}개 기부받음`, donationId], (err) => {
+                                                    if (err) {
+                                                        console.log('Error recording recipient transaction:', err.message);
+                                                    }
+                                                });
+                                            }
+                                            
+                                            // 7. Update user session balance
+                                            req.session.user.balance -= totalCost;
+                                            
+                                            // 8. Check if product is now out of stock and auto-deactivate
+                                            db.get('SELECT stock_quantity FROM products WHERE id = ?', [product_id], (err, updatedProduct) => {
+                                                if (!err && updatedProduct && updatedProduct.stock_quantity <= 0) {
+                                                    db.run('UPDATE products SET is_active = 0 WHERE id = ?', [product_id]);
+                                                }
+                                            });
+                                            
+                                            // 9. Commit transaction
+                                            db.run('COMMIT', (err) => {
+                                                db.close();
+                                                if (err) {
+                                                    return res.status(500).json({ error: '기부 완료 실패' });
+                                                }
+                                                res.json({ 
+                                                    success: true, 
+                                                    message: `${recipientTeam.name}에게 ${product.name} ${quantity}개를 성공적으로 기부했습니다! (총 $${totalCost} 지출)`,
+                                                    newBalance: req.session.user.balance
+                                                });
+                                            });
                                         });
-                                    });
-                                    
-                                    // Record transaction for donor
-                                    db.run('INSERT INTO transactions (user_id, type, amount, description, reference_id) VALUES (?, ?, ?, ?, ?)',
-                                        [req.session.user.id, 'donation_sent', 0, `Donated ${quantity} ${product.name}(s) to ${recipientTeam.name}`, donationId], (err) => {
-                                        if (err) {
-                                            console.log('Error recording donor transaction:', err.message);
-                                        }
-                                    });
-                                    
-                                    // Record transaction for recipient
-                                    db.run('INSERT INTO transactions (user_id, type, amount, description, reference_id) VALUES (?, ?, ?, ?, ?)',
-                                        [recipientLeader.id, 'donation_received', 0, `Received ${quantity} ${product.name}(s) from team ${req.session.user.team_id}`, donationId], (err) => {
-                                        if (err) {
-                                            console.log('Error recording recipient transaction:', err.message);
-                                        }
-                                    });
-                                    
-                                    db.close();
-                                    res.json({ 
-                                        success: true, 
-                                        message: `Successfully donated ${quantity} ${product.name}(s) to ${recipientTeam.name}` 
                                     });
                                 });
                             });
@@ -326,29 +344,22 @@ router.get('/teams', (req, res) => {
     });
 });
 
-// Get team inventory for donations (team leaders only)
-router.get('/team-inventory', (req, res) => {
+// Get store products for donation (team leaders only)
+router.get('/donation-products', (req, res) => {
     // Only team leaders can access this
     if (req.session.user.role !== 'team_leader' && req.session.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Only team leaders can make donations' });
+        return res.status(403).json({ error: '팀 리더만 기부할 수 있습니다' });
     }
     
     const db = new sqlite3.Database(dbPath);
     
-    db.all(`SELECT 
-                ti.product_id,
-                p.name as product_name,
-                SUM(ti.quantity) as available_quantity
-            FROM team_inventory ti
-            JOIN products p ON ti.product_id = p.id
-            WHERE ti.team_id = ? AND ti.quantity > 0
-            GROUP BY ti.product_id, p.name`, 
-        [req.session.user.team_id], (err, inventory) => {
+    db.all('SELECT id, name, price, stock_quantity, category FROM products WHERE is_active = 1 AND stock_quantity > 0 ORDER BY category, name', 
+        (err, products) => {
         db.close();
         if (err) {
             return res.status(500).json({ error: 'Database error' });
         }
-        res.json({ inventory });
+        res.json({ products });
     });
 });
 

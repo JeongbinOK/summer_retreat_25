@@ -100,15 +100,10 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="team_id" class="form-label">Team (optional)</label>
+                                <label for="team_id" class="form-label">팀 (선택사항)</label>
                                 <select class="form-select" id="team_id" name="team_id">
-                                    <option value="">No team</option>
-                                    <option value="1">A그룹</option>
-                                    <option value="2">B그룹</option>
-                                    <option value="3">C그룹</option>
-                                    <option value="4">D그룹</option>
-                                    <option value="5">E그룹</option>
-                                    <option value="6">F그룹</option>
+                                    <option value="">팀 없음</option>
+                                    <!-- 동적으로 로드됨 -->
                                 </select>
                             </div>
                         </form>
@@ -149,15 +144,10 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="editTeamId" class="form-label">Team (optional)</label>
+                                <label for="editTeamId" class="form-label">팀 (선택사항)</label>
                                 <select class="form-select" id="editTeamId" name="team_id">
-                                    <option value="">No team</option>
-                                    <option value="1">A그룹</option>
-                                    <option value="2">B그룹</option>
-                                    <option value="3">C그룹</option>
-                                    <option value="4">D그룹</option>
-                                    <option value="5">E그룹</option>
-                                    <option value="6">F그룹</option>
+                                    <option value="">팀 없음</option>
+                                    <!-- 동적으로 로드됨 -->
                                 </select>
                             </div>
                             <div class="mb-3">
@@ -178,6 +168,43 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Load teams dynamically on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTeams();
+        });
+
+        async function loadTeams() {
+            try {
+                const response = await fetch('/admin/api/teams');
+                const data = await response.json();
+                
+                if (data.teams) {
+                    populateTeamDropdowns(data.teams);
+                }
+            } catch (error) {
+                console.error('Error loading teams:', error);
+            }
+        }
+
+        function populateTeamDropdowns(teams) {
+            const createTeamSelect = document.getElementById('team_id');
+            const editTeamSelect = document.getElementById('editTeamId');
+            
+            // Clear existing options (except first option)
+            [createTeamSelect, editTeamSelect].forEach(select => {
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                // Add team options
+                teams.forEach(team => {
+                    const option = document.createElement('option');
+                    option.value = team.id;
+                    option.textContent = team.name;
+                    select.appendChild(option);
+                });
+            });
+        }
         async function createUser() {
             const form = document.getElementById('createUserForm');
             const formData = new FormData(form);
