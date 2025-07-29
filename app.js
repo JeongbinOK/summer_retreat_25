@@ -109,6 +109,7 @@ async function startServer() {
         
         app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
+            console.log('Admin password updated in init.js');
         });
     } catch (error) {
         console.error('Failed to initialize database:', error);
