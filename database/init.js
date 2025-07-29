@@ -134,8 +134,8 @@ async function createInitialData() {
                 
                 // Create sample teams
                 const teams = [
-                    'Alpha Team', 'Beta Team', 'Gamma Team', 
-                    'Delta Team', 'Echo Team', 'Foxtrot Team'
+                    'A그룹', 'B그룹', 'C그룹', 
+                    'D그룹', 'E그룹', 'F그룹'
                 ];
                 
                 teams.forEach((teamName, index) => {
