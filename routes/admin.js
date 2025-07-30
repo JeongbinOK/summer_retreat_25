@@ -17,25 +17,25 @@ router.get('/rankings', async (req, res) => {
         const teamStats = await db.query(`SELECT 
                     t.id,
                     t.name as team_name,
-                    COUNT(DISTINCT u.id) as member_count,
+                    COUNT(DISTINCT u.id)::INTEGER as member_count,
                     
                     -- Total earned (money codes only, donations are products not money)
                     COALESCE(SUM(CASE 
                         WHEN tr.type = 'earn' THEN tr.amount 
                         ELSE 0 
-                    END), 0) as total_earned,
+                    END), 0)::INTEGER as total_earned,
                     
                     -- Total spent (purchases + donation costs)
                     COALESCE(SUM(CASE 
                         WHEN tr.type IN ('purchase', 'donation_sent') THEN ABS(tr.amount) 
                         ELSE 0 
-                    END), 0) as total_spent,
+                    END), 0)::INTEGER as total_spent,
                     
                     -- Total donated (amount donated to other teams)
                     COALESCE(SUM(CASE 
                         WHEN tr.type = 'donation_sent' THEN ABS(tr.amount) 
                         ELSE 0 
-                    END), 0) as total_donated,
+                    END), 0)::INTEGER as total_donated,
                     
                     -- Current team balance (Total Earned - Total Spent)
                     (COALESCE(SUM(CASE 
@@ -45,7 +45,7 @@ router.get('/rankings', async (req, res) => {
                     COALESCE(SUM(CASE 
                         WHEN tr.type IN ('purchase', 'donation_sent') THEN ABS(tr.amount) 
                         ELSE 0 
-                    END), 0)) as current_balance
+                    END), 0))::INTEGER as current_balance
                     
                 FROM teams t
                 LEFT JOIN users u ON t.id = u.team_id
@@ -53,14 +53,27 @@ router.get('/rankings', async (req, res) => {
                 GROUP BY t.id, t.name
                 ORDER BY t.name`);
             
-        // Calculate donation scores
+        // Calculate donation scores with proper type conversion and debugging
+        console.log('🔍 Raw team stats from database:', teamStats);
+        
         const rankings = teamStats.map(team => {
-            const donationScore = team.total_earned > 0 
-                ? Math.round((team.total_donated / team.total_earned) * 100)
+            // Ensure numbers are properly converted
+            const totalEarned = Number(team.total_earned) || 0;
+            const totalDonated = Number(team.total_donated) || 0;
+            
+            const donationScore = totalEarned > 0 
+                ? Math.round((totalDonated / totalEarned) * 100)
                 : 0;
                 
+            console.log(`📊 Team ${team.team_name}: Earned=${totalEarned}, Donated=${totalDonated}, Score=${donationScore}%`);
+            
             return {
                 ...team,
+                total_earned: totalEarned,
+                total_donated: totalDonated,
+                total_spent: Number(team.total_spent) || 0,
+                current_balance: Number(team.current_balance) || 0,
+                member_count: Number(team.member_count) || 0,
                 donation_score: donationScore
             };
         }).sort((a, b) => b.donation_score - a.donation_score);
@@ -783,6 +796,96 @@ router.get('/api/teams', async (req, res) => {
     } catch (error) {
         console.error('Teams API error:', error);
         res.status(500).json({ error: 'Database error' });
+    }
+});
+
+// 🔍 DEBUG: Rankings calculation debug endpoint
+router.get('/debug-rankings', async (req, res) => {
+    try {
+        const db = new PostgreSQLDatabase();
+        
+        // Get raw team stats
+        const teamStats = await db.query(`SELECT 
+                    t.id,
+                    t.name as team_name,
+                    COUNT(DISTINCT u.id)::INTEGER as member_count,
+                    
+                    -- Total earned (money codes only, donations are products not money)
+                    COALESCE(SUM(CASE 
+                        WHEN tr.type = 'earn' THEN tr.amount 
+                        ELSE 0 
+                    END), 0)::INTEGER as total_earned,
+                    
+                    -- Total spent (purchases + donation costs)
+                    COALESCE(SUM(CASE 
+                        WHEN tr.type IN ('purchase', 'donation_sent') THEN ABS(tr.amount) 
+                        ELSE 0 
+                    END), 0)::INTEGER as total_spent,
+                    
+                    -- Total donated (amount donated to other teams)
+                    COALESCE(SUM(CASE 
+                        WHEN tr.type = 'donation_sent' THEN ABS(tr.amount) 
+                        ELSE 0 
+                    END), 0)::INTEGER as total_donated,
+                    
+                    -- Current team balance (Total Earned - Total Spent)
+                    (COALESCE(SUM(CASE 
+                        WHEN tr.type = 'earn' THEN tr.amount 
+                        ELSE 0 
+                    END), 0) - 
+                    COALESCE(SUM(CASE 
+                        WHEN tr.type IN ('purchase', 'donation_sent') THEN ABS(tr.amount) 
+                        ELSE 0 
+                    END), 0))::INTEGER as current_balance
+                    
+                FROM teams t
+                LEFT JOIN users u ON t.id = u.team_id
+                LEFT JOIN transactions tr ON u.id = tr.user_id
+                GROUP BY t.id, t.name
+                ORDER BY t.name`);
+        
+        // Get actual transaction data for verification
+        const transactions = await db.query(`
+            SELECT t.name as team_name, tr.type, tr.amount, tr.description, tr.created_at
+            FROM transactions tr
+            JOIN users u ON tr.user_id = u.id
+            JOIN teams t ON u.team_id = t.id
+            ORDER BY t.name, tr.created_at DESC
+        `);
+        
+        // Calculate scores with detailed logs
+        const debugInfo = teamStats.map(team => {
+            const totalEarned = Number(team.total_earned) || 0;
+            const totalDonated = Number(team.total_donated) || 0;
+            const donationScore = totalEarned > 0 
+                ? Math.round((totalDonated / totalEarned) * 100)
+                : 0;
+                
+            return {
+                team_name: team.team_name,
+                raw_data: team,
+                converted_data: {
+                    total_earned: totalEarned,
+                    total_donated: totalDonated,
+                    total_spent: Number(team.total_spent) || 0,
+                    current_balance: Number(team.current_balance) || 0,
+                    member_count: Number(team.member_count) || 0
+                },
+                calculation: {
+                    formula: `(${totalDonated} / ${totalEarned}) * 100`,
+                    result: donationScore
+                }
+            };
+        });
+        
+        res.json({
+            debug_info: debugInfo,
+            raw_team_stats: teamStats,
+            sample_transactions: transactions.slice(0, 20) // First 20 transactions for debugging
+        });
+    } catch (error) {
+        console.error('Debug rankings error:', error);
+        res.status(500).json({ error: 'Debug error', details: error.message });
     }
 });
 
