@@ -210,7 +210,8 @@ router.get('/team', async (req, res) => {
             teamMembers: members, 
             teamInfo: team,
             financialData: financialData,
-            receivedDonations: receivedDonations
+            receivedDonations: receivedDonations,
+            formatDate: require('../database/init_universal').formatDate
         });
     } catch (err) {
         console.error('Team info error:', err);
@@ -307,7 +308,8 @@ router.get('/team-inventory', async (req, res) => {
             user: req.session.user, 
             inventory: inventory || [],
             inventoryHistory: inventoryHistory || [],
-            teamInfo: team 
+            teamInfo: team,
+            formatDate: require('../database/init_universal').formatDate
         });
     } catch (err) {
         console.error('Team inventory error:', err);

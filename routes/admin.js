@@ -343,7 +343,11 @@ router.get('/money-codes', async (req, res) => {
                 LEFT JOIN users u ON mc.used_by = u.id 
                 ORDER BY mc.created_at DESC`);
                 
-        res.render('admin/money-codes', { codes, user: req.session.user });
+        res.render('admin/money-codes', { 
+            codes, 
+            user: req.session.user,
+            formatDate: require('../database/init_universal').formatDate
+        });
     } catch (error) {
         console.error('Money codes error:', error);
         res.status(500).json({ error: 'Database error' });
@@ -601,7 +605,11 @@ router.get('/orders', async (req, res) => {
             new Date(b.created_at) - new Date(a.created_at)
         );
                 
-        res.render('admin/orders', { orders: allTransactions, user: req.session.user });
+        res.render('admin/orders', { 
+            orders: allTransactions, 
+            user: req.session.user,
+            formatDate: require('../database/init_universal').formatDate
+        });
     } catch (error) {
         console.error('Orders error:', error);
         res.status(500).json({ error: 'Database error' });
@@ -699,6 +707,13 @@ router.post('/reset-database', async (req, res) => {
             console.log('Error clearing money_codes:', err.message);
         }
         
+        // Reset team leaders first to avoid foreign key constraint
+        try {
+            await db.run('UPDATE teams SET leader_id = NULL');
+        } catch (err) {
+            console.log('Error clearing team leaders:', err.message);
+        }
+        
         // Reset all users except admin to initial state
         try {
             await db.run('DELETE FROM users WHERE role != ?', ['admin']);
@@ -745,26 +760,7 @@ router.post('/reset-database', async (req, res) => {
             }
         }
         
-        // Re-create initial products after reset
-        const sampleProducts = [
-            { name: 'Coffee', description: 'Hot coffee from cafe', price: 500, category: 'beverage', stock: 20 },
-            { name: 'Snacks', description: 'Assorted snacks', price: 300, category: 'food', stock: 15 },
-            { name: 'Prayer Request', description: 'Personal prayer service', price: 200, category: 'service', stock: 999 },
-            { name: 'Souvenir', description: 'Retreat souvenir item', price: 1000, category: 'item', stock: 10 }
-        ];
-
-        for (const product of sampleProducts) {
-            try {
-                await db.run(`INSERT INTO products (name, description, price, category, stock_quantity, initial_stock) 
-                    VALUES (?, ?, ?, ?, ?, ?)`,
-                    [product.name, product.description, product.price, product.category, product.stock, product.stock]);
-                console.log(`✅ Sample product '${product.name}' recreated`);
-            } catch (err) {
-                console.log(`Error recreating sample product ${product.name}:`, err.message);
-            }
-        }
-        
-        res.json({ success: true, message: 'Database reset to initial values with sample products recreated successfully' });
+        res.json({ success: true, message: 'Database reset to initial values successfully - all data cleared except admin user' });
     } catch (error) {
         console.error('Database reset error:', error);
         res.status(500).json({ error: 'Database reset failed' });
