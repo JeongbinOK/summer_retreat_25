@@ -1,10 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Database } = require('../database/config');
 
 const router = express.Router();
-const dbPath = path.join(__dirname, '../database/retreat.db');
 
 // Admin Dashboard
 router.get('/dashboard', (req, res) => {
@@ -12,46 +10,42 @@ router.get('/dashboard', (req, res) => {
 });
 
 // Team Rankings Dashboard
-router.get('/rankings', (req, res) => {
-    const db = new sqlite3.Database(dbPath);
-    
-    db.all(`SELECT 
-                t.id,
-                t.name as team_name,
-                COUNT(DISTINCT u.id) as member_count,
-                
-                -- Total earned (money codes + donations received)
-                COALESCE(SUM(CASE 
-                    WHEN tr.type IN ('earn', 'donation_received') THEN tr.amount 
-                    ELSE 0 
-                END), 0) as total_earned,
-                
-                -- Total spent (purchases only, not donations)
-                COALESCE(SUM(CASE 
-                    WHEN tr.type = 'purchase' THEN ABS(tr.amount) 
-                    ELSE 0 
-                END), 0) as total_spent,
-                
-                -- Total donated (amount donated to other teams)
-                COALESCE(SUM(CASE 
-                    WHEN tr.type = 'donation_sent' THEN ABS(tr.amount) 
-                    ELSE 0 
-                END), 0) as total_donated,
-                
-                -- Current team balance
-                COALESCE(SUM(u.balance), 0) as current_balance
-                
-            FROM teams t
-            LEFT JOIN users u ON t.id = u.team_id
-            LEFT JOIN transactions tr ON u.id = tr.user_id
-            GROUP BY t.id, t.name
-            ORDER BY t.name`, (err, teamStats) => {
+router.get('/rankings', async (req, res) => {
+    try {
+        const db = new Database();
         
-        if (err) {
-            db.close();
-            return res.status(500).send('Database error');
-        }
-        
+        const teamStats = await db.query(`SELECT 
+                    t.id,
+                    t.name as team_name,
+                    COUNT(DISTINCT u.id) as member_count,
+                    
+                    -- Total earned (money codes + donations received)
+                    COALESCE(SUM(CASE 
+                        WHEN tr.type IN ('earn', 'donation_received') THEN tr.amount 
+                        ELSE 0 
+                    END), 0) as total_earned,
+                    
+                    -- Total spent (purchases only, not donations)
+                    COALESCE(SUM(CASE 
+                        WHEN tr.type = 'purchase' THEN ABS(tr.amount) 
+                        ELSE 0 
+                    END), 0) as total_spent,
+                    
+                    -- Total donated (amount donated to other teams)
+                    COALESCE(SUM(CASE 
+                        WHEN tr.type = 'donation_sent' THEN ABS(tr.amount) 
+                        ELSE 0 
+                    END), 0) as total_donated,
+                    
+                    -- Current team balance
+                    COALESCE(SUM(u.balance), 0) as current_balance
+                    
+                FROM teams t
+                LEFT JOIN users u ON t.id = u.team_id
+                LEFT JOIN transactions tr ON u.id = tr.user_id
+                GROUP BY t.id, t.name
+                ORDER BY t.name`);
+            
         // Calculate donation scores
         const rankings = teamStats.map(team => {
             const donationScore = team.total_earned > 0 
@@ -64,28 +58,31 @@ router.get('/rankings', (req, res) => {
             };
         }).sort((a, b) => b.donation_score - a.donation_score);
         
-        db.close();
         res.render('admin/rankings', { 
             user: req.session.user,
             rankings: rankings
         });
-    });
+    } catch (error) {
+        console.error('Rankings error:', error);
+        res.status(500).send('Database error');
+    }
 });
 
 // User Management
-router.get('/users', (req, res) => {
-    const db = new sqlite3.Database(dbPath);
-    
-    db.all(`SELECT u.*, t.name as team_name 
-            FROM users u 
-            LEFT JOIN teams t ON u.team_id = t.id 
-            ORDER BY u.created_at DESC`, (err, users) => {
-        db.close();
-        if (err) {
-            return res.status(500).json({ error: 'Database error' });
-        }
+router.get('/users', async (req, res) => {
+    try {
+        const db = new Database();
+        
+        const users = await db.query(`SELECT u.*, t.name as team_name 
+                FROM users u 
+                LEFT JOIN teams t ON u.team_id = t.id 
+                ORDER BY u.created_at DESC`);
+                
         res.render('admin/users', { users, user: req.session.user });
-    });
+    } catch (error) {
+        console.error('Users error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 // Create User
@@ -98,21 +95,18 @@ router.post('/users', async (req, res) => {
     
     try {
         const passwordHash = await bcrypt.hash(password, 10);
-        const db = new sqlite3.Database(dbPath);
+        const db = new Database();
         
-        db.run('INSERT INTO users (username, password_hash, role, team_id) VALUES (?, ?, ?, ?)',
-            [username, passwordHash, role, team_id || null], function(err) {
-            db.close();
-            if (err) {
-                if (err.message.includes('UNIQUE constraint failed')) {
-                    return res.status(400).json({ error: 'Username already exists' });
-                }
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.json({ success: true, userId: this.lastID });
-        });
+        const result = await db.run('INSERT INTO users (username, password_hash, role, team_id) VALUES (?, ?, ?, ?)',
+            [username, passwordHash, role, team_id || null]);
+            
+        res.json({ success: true, userId: result.lastID });
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        console.error('Create user error:', error);
+        if (error.message && error.message.includes('duplicate key') || error.code === '23505') {
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+        res.status(500).json({ error: 'Database error' });
     }
 });
 
