@@ -88,8 +88,9 @@ router.post('/redeem-code', async (req, res) => {
         }
         
         // Mark code as used
-        await db.run('UPDATE money_codes SET used = true, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [req.session.user.id, moneyCode.id]);
+        const now = new Date().toISOString();
+        await db.run('UPDATE money_codes SET used = true, used_by = ?, used_at = ? WHERE id = ?',
+            [req.session.user.id, now, moneyCode.id]);
         
         // Add money to user balance
         await db.run('UPDATE users SET balance = balance + ? WHERE id = ?',

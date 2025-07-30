@@ -263,13 +263,14 @@ router.get('/teams', async (req, res) => {
     try {
         const db = new Database();
         
-        const teams = await db.query(`SELECT t.id, t.name, t.leader_id, t.created_at, u.username as leader_name,
-                       COUNT(m.id) as member_count
-                FROM teams t 
-                LEFT JOIN users u ON t.leader_id = u.id
-                LEFT JOIN users m ON t.id = m.team_id
-                GROUP BY t.id, t.name, t.leader_id, t.created_at, u.username
-                ORDER BY t.name`);
+        // Get teams with leader info and member count separately for PostgreSQL compatibility
+        const teams = await db.query(`
+            SELECT t.id, t.name, t.leader_id, t.created_at, u.username as leader_name,
+                   (SELECT COUNT(*) FROM users m WHERE m.team_id = t.id) as member_count
+            FROM teams t 
+            LEFT JOIN users u ON t.leader_id = u.id
+            ORDER BY t.name
+        `);
                 
         res.render('admin/teams', { teams, user: req.session.user });
     } catch (error) {
