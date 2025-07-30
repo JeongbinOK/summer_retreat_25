@@ -102,13 +102,42 @@ app.get('/dashboard', requireAuth, (req, res) => {
 });
 
 // 🔍 DEBUG: Environment and database status endpoint
-app.get('/debug-status', requireAdmin, (req, res) => {
+app.get('/debug-status', requireAdmin, async (req, res) => {
     const { Database, isProduction } = require('./database/config');
+    
+    let dbTestResult = null;
+    let actualDataCounts = null;
+    
+    try {
+        // Test actual database connection
+        const db = new Database();
+        
+        // Test connection with a simple query
+        const testQuery = await db.query('SELECT 1 as test');
+        dbTestResult = testQuery.length > 0 ? 'Connected' : 'Failed';
+        
+        // Get actual data counts
+        const users = await db.query('SELECT COUNT(*) as count FROM users');
+        const teams = await db.query('SELECT COUNT(*) as count FROM teams');
+        const products = await db.query('SELECT COUNT(*) as count FROM products');
+        const transactions = await db.query('SELECT COUNT(*) as count FROM transactions');
+        
+        actualDataCounts = {
+            users: users[0]?.count || 0,
+            teams: teams[0]?.count || 0,
+            products: products[0]?.count || 0,
+            transactions: transactions[0]?.count || 0
+        };
+        
+    } catch (error) {
+        dbTestResult = `Error: ${error.message}`;
+    }
     
     const status = {
         environment: {
             NODE_ENV: process.env.NODE_ENV,
             DATABASE_URL_exists: !!process.env.DATABASE_URL,
+            DATABASE_URL_host: process.env.DATABASE_URL ? process.env.DATABASE_URL.split('@')[1]?.split('/')[0] : 'None',
             DATABASE_URL_type: process.env.DATABASE_URL ? 
                 (process.env.DATABASE_URL.startsWith('postgresql://') ? 'PostgreSQL' : 'Other') : 'None',
             isProduction: isProduction,
@@ -116,7 +145,8 @@ app.get('/debug-status', requireAdmin, (req, res) => {
         },
         database: {
             type: isProduction && process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite',
-            connected: true // We'll update this with actual connection test
+            connection_test: dbTestResult,
+            actual_data: actualDataCounts
         },
         server: {
             uptime: process.uptime(),
