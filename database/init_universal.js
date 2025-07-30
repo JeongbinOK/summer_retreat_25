@@ -42,7 +42,20 @@ class UniversalDatabase {
     async initializePostgreSQL() {
         console.log('🔧 Initializing PostgreSQL database...');
         
-        // Read and execute PostgreSQL schema
+        // Check if database is already initialized
+        try {
+            const tableCheck = await this.db.query("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')");
+            const tablesExist = tableCheck[0]?.exists;
+            
+            if (tablesExist) {
+                console.log('✅ Database tables already exist, skipping schema creation');
+                return; // Skip schema creation if tables exist
+            }
+        } catch (error) {
+            console.log('🔍 Checking if database exists, proceeding with initialization...');
+        }
+        
+        // Read and execute PostgreSQL schema ONLY if tables don't exist
         const schemaPath = path.join(__dirname, 'postgres_init.sql');
         const schema = fs.readFileSync(schemaPath, 'utf8');
         
@@ -52,6 +65,12 @@ class UniversalDatabase {
         for (const statement of statements) {
             const cleanStatement = statement.trim();
             if (cleanStatement.length === 0) continue;
+            
+            // Skip INSERT statements - they will be handled by createInitialData()
+            if (cleanStatement.toLowerCase().startsWith('insert')) {
+                console.log('⚠️ Skipping INSERT statement (handled by createInitialData):', cleanStatement.substring(0, 50) + '...');
+                continue;
+            }
             
             try {
                 await this.db.query(cleanStatement);
