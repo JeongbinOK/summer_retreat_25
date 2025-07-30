@@ -19,15 +19,15 @@ router.get('/rankings', async (req, res) => {
                     t.name as team_name,
                     COUNT(DISTINCT u.id) as member_count,
                     
-                    -- Total earned (money codes + donations received)
+                    -- Total earned (money codes only, donations are products not money)
                     COALESCE(SUM(CASE 
-                        WHEN tr.type IN ('earn', 'donation_received') THEN tr.amount 
+                        WHEN tr.type = 'earn' THEN tr.amount 
                         ELSE 0 
                     END), 0) as total_earned,
                     
-                    -- Total spent (purchases only, not donations)
+                    -- Total spent (purchases + donation costs)
                     COALESCE(SUM(CASE 
-                        WHEN tr.type = 'purchase' THEN ABS(tr.amount) 
+                        WHEN tr.type IN ('purchase', 'donation_sent') THEN ABS(tr.amount) 
                         ELSE 0 
                     END), 0) as total_spent,
                     
@@ -37,7 +37,7 @@ router.get('/rankings', async (req, res) => {
                         ELSE 0 
                     END), 0) as total_donated,
                     
-                    -- Current team balance
+                    -- Current team balance (mainly team leaders hold money)
                     COALESCE(SUM(u.balance), 0) as current_balance
                     
                 FROM teams t
