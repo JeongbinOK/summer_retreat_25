@@ -11,6 +11,9 @@ let db;
 if (isProduction && process.env.DATABASE_URL) {
     // PostgreSQL for production (Render)
     console.log('🗄️ Using PostgreSQL database for production');
+    console.log('📡 DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    console.log('📡 NODE_ENV:', process.env.NODE_ENV);
+    console.log('📡 isProduction:', isProduction);
     console.log('📡 Connecting to:', process.env.DATABASE_URL.split('@')[1]); // Log only host part for security
     
     db = new Pool({

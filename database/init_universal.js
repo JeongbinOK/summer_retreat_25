@@ -214,6 +214,24 @@ class UniversalDatabase {
     async createInitialData() {
         console.log('📝 Creating initial data...');
         
+        // 🔍 TEST: Check if existing data exists before initialization
+        try {
+            const existingUsers = await this.db.query('SELECT COUNT(*) as count FROM users');
+            const existingTeams = await this.db.query('SELECT COUNT(*) as count FROM teams'); 
+            const existingProducts = await this.db.query('SELECT COUNT(*) as count FROM products');
+            
+            console.log('🔍 EXISTING DATA CHECK:');
+            console.log(`   Users: ${existingUsers[0]?.count || 0}`);
+            console.log(`   Teams: ${existingTeams[0]?.count || 0}`);
+            console.log(`   Products: ${existingProducts[0]?.count || 0}`);
+            
+            if ((existingUsers[0]?.count || 0) > 1) { // More than just admin
+                console.log('✅ EXISTING USER DATA FOUND - Preserving data');
+            }
+        } catch (error) {
+            console.log('⚠️ Could not check existing data (tables may not exist yet)');
+        }
+        
         try {
             // Create or update admin user
             const adminPassword = await bcrypt.hash('akftmaryghl', 10);
