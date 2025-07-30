@@ -581,7 +581,7 @@ router.post('/orders/:id/verify', async (req, res) => {
     try {
         const db = new Database();
         
-        await db.run('UPDATE orders SET verified = 1, status = 'verified' WHERE id = ?', [orderId]);
+        await db.run('UPDATE orders SET verified = 1, status = ? WHERE id = ?', ['verified', orderId]);
         res.json({ success: true });
     } catch (error) {
         console.error('Verify order error:', error);
@@ -605,7 +605,7 @@ router.post('/change-password', async (req, res) => {
         const db = new Database();
         
         // Get current admin password hash
-        const user = await db.get('SELECT password_hash FROM users WHERE role = 'admin' LIMIT 1');
+        const user = await db.get('SELECT password_hash FROM users WHERE role = ? LIMIT 1', ['admin']);
         if (!user) {
             return res.status(404).json({ error: 'Admin user not found' });
         }
@@ -621,7 +621,7 @@ router.post('/change-password', async (req, res) => {
         const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
         
         // Update password
-        await db.run('UPDATE users SET password_hash = ? WHERE role = 'admin'', [newPasswordHash]);
+        await db.run('UPDATE users SET password_hash = ? WHERE role = ?', [newPasswordHash, 'admin']);
         res.json({ success: true, message: 'Password changed successfully' });
     } catch (error) {
         console.error('Change password error:', error);
@@ -667,14 +667,14 @@ router.post('/reset-database', async (req, res) => {
         
         // Reset all users except admin to initial state
         try {
-            await db.run('DELETE FROM users WHERE role != 'admin'');
+            await db.run('DELETE FROM users WHERE role != ?', ['admin']);
         } catch (err) {
             console.log('Error clearing non-admin users:', err.message);
         }
         
         // Reset admin balance to 0
         try {
-            await db.run('UPDATE users SET balance = 0 WHERE role = 'admin'');
+            await db.run('UPDATE users SET balance = 0 WHERE role = ?', ['admin']);
         } catch (err) {
             console.log('Error resetting admin balance:', err.message);
         }
