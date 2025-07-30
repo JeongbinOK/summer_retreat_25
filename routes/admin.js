@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const { Database } = require('../database/config');
+const { PostgreSQLDatabase } = require('../database/postgres');
 
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.get('/dashboard', (req, res) => {
 // Team Rankings Dashboard
 router.get('/rankings', async (req, res) => {
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         const teamStats = await db.query(`SELECT 
                     t.id,
@@ -71,7 +71,7 @@ router.get('/rankings', async (req, res) => {
 // User Management
 router.get('/users', async (req, res) => {
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         const users = await db.query(`SELECT u.*, t.name as team_name 
                 FROM users u 
@@ -95,14 +95,14 @@ router.post('/users', async (req, res) => {
     
     try {
         const passwordHash = await bcrypt.hash(password, 10);
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Start transaction for team leader assignment
-        await db.beginTransaction();
+        const transaction = await db.beginTransaction();
         
         try {
             // Create the user
-            const result = await db.run('INSERT INTO users (username, password_hash, role, team_id) VALUES (?, ?, ?, ?)',
+            const result = await transaction.run('INSERT INTO users (username, password_hash, role, team_id) VALUES ($1, $2, $3, $4) RETURNING id',
                 [username, passwordHash, role, team_id || null]);
             
             const userId = result.lastID;
@@ -110,18 +110,18 @@ router.post('/users', async (req, res) => {
             // If the user is assigned as team_leader and has a team_id, update team leadership
             if (role === 'team_leader' && team_id) {
                 // First, remove previous leader role from other users in the same team
-                await db.run('UPDATE users SET role = ? WHERE team_id = ? AND role = ? AND id != ?', 
+                await transaction.run('UPDATE users SET role = $1 WHERE team_id = $2 AND role = $3 AND id != $4', 
                     ['participant', team_id, 'team_leader', userId]);
                 
                 // Update the team's leader_id
-                await db.run('UPDATE teams SET leader_id = ? WHERE id = ?', [userId, team_id]);
+                await transaction.run('UPDATE teams SET leader_id = $1 WHERE id = $2', [userId, team_id]);
             }
             
-            await db.commit();
+            await transaction.commit();
             res.json({ success: true, userId: userId });
             
         } catch (error) {
-            await db.rollback();
+            await transaction.rollback();
             throw error;
         }
         
@@ -144,10 +144,10 @@ router.post('/users/:id/edit', async (req, res) => {
     }
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Get current user data to check for balance changes
-        const currentUser = await db.get('SELECT balance FROM users WHERE id = ?', [userId]);
+        const currentUser = await db.get('SELECT balance FROM users WHERE id = $1', [userId]);
         if (!currentUser) {
             return res.status(404).json({ error: 'User not found' });
         }
@@ -162,21 +162,21 @@ router.post('/users/:id/edit', async (req, res) => {
         if (password && password.trim() !== '') {
             // Update with new password
             const passwordHash = await bcrypt.hash(password, 10);
-            updateQuery = 'UPDATE users SET username = ?, password_hash = ?, role = ?, team_id = ?, balance = ? WHERE id = ?';
+            updateQuery = 'UPDATE users SET username = $1, password_hash = $2, role = $3, team_id = $4, balance = $5 WHERE id = $6';
             updateParams = [username, passwordHash, role, team_id || null, newBalance, userId];
         } else {
             // Update without changing password
-            updateQuery = 'UPDATE users SET username = ?, role = ?, team_id = ?, balance = ? WHERE id = ?';
+            updateQuery = 'UPDATE users SET username = $1, role = $2, team_id = $3, balance = $4 WHERE id = $5';
             updateParams = [username, role, team_id || null, newBalance, userId];
         }
         
-        await db.beginTransaction();
+        const transaction = await db.beginTransaction();
         
         try {
             // Get original user data to check role/team changes
-            const originalUser = await db.get('SELECT role, team_id FROM users WHERE id = ?', [userId]);
+            const originalUser = await transaction.get('SELECT role, team_id FROM users WHERE id = $1', [userId]);
             
-            await db.run(updateQuery, updateParams);
+            await transaction.run(updateQuery, updateParams);
             
             // Handle team leadership changes
             const roleChanged = originalUser.role !== role;
@@ -185,17 +185,17 @@ router.post('/users/:id/edit', async (req, res) => {
             if (roleChanged || teamChanged) {
                 // If user was previously a team leader, remove leadership from teams table
                 if (originalUser.role === 'team_leader' && originalUser.team_id) {
-                    await db.run('UPDATE teams SET leader_id = NULL WHERE leader_id = ?', [userId]);
+                    await transaction.run('UPDATE teams SET leader_id = NULL WHERE leader_id = $1', [userId]);
                 }
                 
                 // If user is now a team leader and has a team, assign leadership
                 if (role === 'team_leader' && team_id) {
                     // Remove leadership from other users in the same team
-                    await db.run('UPDATE users SET role = ? WHERE team_id = ? AND role = ? AND id != ?', 
+                    await transaction.run('UPDATE users SET role = $1 WHERE team_id = $2 AND role = $3 AND id != $4', 
                         ['participant', team_id, 'team_leader', userId]);
                     
                     // Assign leadership in teams table
-                    await db.run('UPDATE teams SET leader_id = ? WHERE id = ?', [userId, team_id]);
+                    await transaction.run('UPDATE teams SET leader_id = $1 WHERE id = $2', [userId, team_id]);
                 }
             }
             
@@ -206,15 +206,15 @@ router.post('/users/:id/edit', async (req, res) => {
                     ? `Admin added $${balanceDifference} to balance` 
                     : `Admin removed $${Math.abs(balanceDifference)} from balance`;
                     
-                await db.run('INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)',
+                await transaction.run('INSERT INTO transactions (user_id, type, amount, description) VALUES ($1, $2, $3, $4)',
                     [userId, 'admin_adjustment', balanceDifference, description]);
             }
             
-            await db.commit();
+            await transaction.commit();
             res.json({ success: true });
             
         } catch (transactionError) {
-            await db.rollback();
+            await transaction.rollback();
             throw transactionError;
         }
     } catch (error) {
@@ -231,10 +231,10 @@ router.post('/users/:id/delete', async (req, res) => {
     const userId = req.params.id;
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Prevent deleting admin users
-        const user = await db.get('SELECT role FROM users WHERE id = ?', [userId]);
+        const user = await db.get('SELECT role FROM users WHERE id = $1', [userId]);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
@@ -244,13 +244,13 @@ router.post('/users/:id/delete', async (req, res) => {
         }
         
         // Check if user has transactions
-        const result = await db.get('SELECT COUNT(*) as count FROM transactions WHERE user_id = ?', [userId]);
+        const result = await db.get('SELECT COUNT(*) as count FROM transactions WHERE user_id = $1', [userId]);
         if (result.count > 0) {
             return res.status(400).json({ error: 'Cannot delete user with transaction history' });
         }
         
         // Safe to delete
-        await db.run('DELETE FROM users WHERE id = ?', [userId]);
+        await db.run('DELETE FROM users WHERE id = $1', [userId]);
         res.json({ success: true });
     } catch (error) {
         console.error('Delete user error:', error);
@@ -261,7 +261,7 @@ router.post('/users/:id/delete', async (req, res) => {
 // Team Management
 router.get('/teams', async (req, res) => {
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Get teams with leader info and member count separately for PostgreSQL compatibility
         const teams = await db.query(`
@@ -289,26 +289,26 @@ router.post('/teams/:id/leader', async (req, res) => {
     }
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
-        await db.beginTransaction();
+        const transaction = await db.beginTransaction();
         
         try {
             // Remove previous leader role from all users in this team
-            await db.run('UPDATE users SET role = ? WHERE team_id = ? AND role = ?', 
+            await transaction.run('UPDATE users SET role = $1 WHERE team_id = $2 AND role = $3', 
                 ['participant', teamId, 'team_leader']);
             
             // Set new leader in teams table
-            await db.run('UPDATE teams SET leader_id = ? WHERE id = ?', [leader_id, teamId]);
+            await transaction.run('UPDATE teams SET leader_id = $1 WHERE id = $2', [leader_id, teamId]);
             
             // Set new leader role in users table
-            await db.run('UPDATE users SET role = ? WHERE id = ?', ['team_leader', leader_id]);
+            await transaction.run('UPDATE users SET role = $1 WHERE id = $2', ['team_leader', leader_id]);
             
-            await db.commit();
+            await transaction.commit();
             res.json({ success: true });
             
         } catch (transactionError) {
-            await db.rollback();
+            await transaction.rollback();
             throw transactionError;
         }
         
@@ -323,9 +323,9 @@ router.get('/teams/:id/members', async (req, res) => {
     const teamId = req.params.id;
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
-        const members = await db.query('SELECT id, username, role FROM users WHERE team_id = ? ORDER BY username', [teamId]);
+        const members = await db.query('SELECT id, username, role FROM users WHERE team_id = $1 ORDER BY username', [teamId]);
         res.json({ members });
     } catch (error) {
         console.error('Get team members error:', error);
@@ -336,7 +336,7 @@ router.get('/teams/:id/members', async (req, res) => {
 // Money Code Management
 router.get('/money-codes', async (req, res) => {
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         const codes = await db.query(`SELECT mc.*, u.username as used_by_username 
                 FROM money_codes mc 
@@ -346,7 +346,7 @@ router.get('/money-codes', async (req, res) => {
         res.render('admin/money-codes', { 
             codes, 
             user: req.session.user,
-            formatDate: require('../database/init_universal').formatDate
+            formatDate: require('../database/init_postgres').formatDate
         });
     } catch (error) {
         console.error('Money codes error:', error);
@@ -363,9 +363,9 @@ router.post('/money-codes', async (req, res) => {
     }
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
-        await db.beginTransaction();
+        const transaction = await db.beginTransaction();
         
         try {
             let generated = 0;
@@ -373,15 +373,15 @@ router.post('/money-codes', async (req, res) => {
             // Insert codes one by one for PostgreSQL compatibility
             for (let i = 0; i < quantity; i++) {
                 const code = 'RC' + Date.now() + Math.random().toString(36).substr(2, 6);
-                await db.run('INSERT INTO money_codes (code, amount) VALUES (?, ?)', [code, amount]);
+                await transaction.run('INSERT INTO money_codes (code, amount) VALUES ($1, $2)', [code, amount]);
                 generated++;
             }
             
-            await db.commit();
+            await transaction.commit();
             res.json({ success: true, generated: generated });
             
         } catch (transactionError) {
-            await db.rollback();
+            await transaction.rollback();
             throw transactionError;
         }
         
@@ -394,7 +394,7 @@ router.post('/money-codes', async (req, res) => {
 // Product Management
 router.get('/products', async (req, res) => {
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         const products = await db.query('SELECT * FROM products ORDER BY created_at DESC');
         res.render('admin/products', { products, user: req.session.user });
@@ -417,9 +417,9 @@ router.post('/products', async (req, res) => {
     }
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
-        const result = await db.run('INSERT INTO products (name, description, price, category, stock_quantity, initial_stock) VALUES (?, ?, ?, ?, ?, ?)',
+        const result = await db.run('INSERT INTO products (name, description, price, category, stock_quantity, initial_stock) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
             [name, description || '', price, category || 'item', stock_quantity, stock_quantity]);
             
         res.json({ success: true, productId: result.lastID });
@@ -435,9 +435,9 @@ router.post('/products/:id/toggle', async (req, res) => {
     const { is_active } = req.body;
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
-        await db.run('UPDATE products SET is_active = ? WHERE id = ?', [is_active ? true : false, productId]);
+        await db.run('UPDATE products SET is_active = $1 WHERE id = $2', [is_active ? true : false, productId]);
         res.json({ success: true });
     } catch (error) {
         console.error('Toggle product error:', error);
@@ -459,15 +459,15 @@ router.post('/products/:id/edit', async (req, res) => {
     }
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // If stock_quantity is provided, update it
         if (stock_quantity !== undefined) {
-            await db.run('UPDATE products SET name = ?, description = ?, price = ?, category = ?, stock_quantity = ? WHERE id = ?',
+            await db.run('UPDATE products SET name = $1, description = $2, price = $3, category = $4, stock_quantity = $5 WHERE id = $6',
                 [name, description || '', price, category || 'item', stock_quantity, productId]);
         } else {
             // Update without changing stock
-            await db.run('UPDATE products SET name = ?, description = ?, price = ?, category = ? WHERE id = ?',
+            await db.run('UPDATE products SET name = $1, description = $2, price = $3, category = $4 WHERE id = $5',
                 [name, description || '', price, category || 'item', productId]);
         }
         
@@ -483,14 +483,14 @@ router.post('/products/:id/delete', async (req, res) => {
     const productId = req.params.id;
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Allow product deletion even if ordered (as requested by user)
         // Note: This will maintain referential integrity in the database
         // but allows admins to clean up products as needed during the retreat
         
         // Safe to delete
-        await db.run('DELETE FROM products WHERE id = ?', [productId]);
+        await db.run('DELETE FROM products WHERE id = $1', [productId]);
         res.json({ success: true });
     } catch (error) {
         console.error('Delete product error:', error);
@@ -508,7 +508,7 @@ router.post('/products/:id/stock', async (req, res) => {
     }
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         if (type === 'set') {
             // Set absolute stock value
@@ -516,12 +516,12 @@ router.post('/products/:id/stock', async (req, res) => {
                 return res.status(400).json({ error: 'Stock cannot be negative' });
             }
             
-            await db.run('UPDATE products SET stock_quantity = ? WHERE id = ?', [adjustment, productId]);
+            await db.run('UPDATE products SET stock_quantity = $1 WHERE id = $2', [adjustment, productId]);
             
             // Auto-reactivate product if stock is now available
             if (adjustment > 0) {
                 try {
-                    await db.run('UPDATE products SET is_active = true WHERE id = ?', [productId]);
+                    await db.run('UPDATE products SET is_active = true WHERE id = $1', [productId]);
                 } catch (err) {
                     console.log('Error auto-reactivating restocked product:', err.message);
                 }
@@ -530,7 +530,7 @@ router.post('/products/:id/stock', async (req, res) => {
             res.json({ success: true });
         } else {
             // Adjust stock by amount (can be positive or negative)
-            const product = await db.get('SELECT stock_quantity FROM products WHERE id = ?', [productId]);
+            const product = await db.get('SELECT stock_quantity FROM products WHERE id = $1', [productId]);
             if (!product) {
                 return res.status(404).json({ error: 'Product not found' });
             }
@@ -540,19 +540,19 @@ router.post('/products/:id/stock', async (req, res) => {
                 return res.status(400).json({ error: 'Stock cannot go below zero' });
             }
             
-            await db.run('UPDATE products SET stock_quantity = ? WHERE id = ?', [newStock, productId]);
+            await db.run('UPDATE products SET stock_quantity = $1 WHERE id = $2', [newStock, productId]);
             
             // Auto-reactivate if stock is now available and was previously 0
             if (newStock > 0 && product.stock_quantity <= 0) {
                 try {
-                    await db.run('UPDATE products SET is_active = true WHERE id = ?', [productId]);
+                    await db.run('UPDATE products SET is_active = true WHERE id = $1', [productId]);
                 } catch (err) {
                     console.log('Error auto-reactivating restocked product:', err.message);
                 }
             } else if (newStock <= 0) {
                 // Auto-deactivate if stock is now 0
                 try {
-                    await db.run('UPDATE products SET is_active = false WHERE id = ?', [productId]);
+                    await db.run('UPDATE products SET is_active = false WHERE id = $1', [productId]);
                 } catch (err) {
                     console.log('Error auto-deactivating out of stock product:', err.message);
                 }
@@ -569,7 +569,7 @@ router.post('/products/:id/stock', async (req, res) => {
 // Orders Management (includes both purchases and donations)
 router.get('/orders', async (req, res) => {
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Get purchase orders
         const orders = await db.query(`SELECT o.*, u.username, t.name as team_name, p.name as product_name, 'purchase' as type
@@ -608,7 +608,7 @@ router.get('/orders', async (req, res) => {
         res.render('admin/orders', { 
             orders: allTransactions, 
             user: req.session.user,
-            formatDate: require('../database/init_universal').formatDate
+            formatDate: require('../database/init_postgres').formatDate
         });
     } catch (error) {
         console.error('Orders error:', error);
@@ -621,9 +621,9 @@ router.post('/orders/:id/verify', async (req, res) => {
     const orderId = req.params.id;
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
-        await db.run('UPDATE orders SET verified = true, status = ? WHERE id = ?', ['verified', orderId]);
+        await db.run('UPDATE orders SET verified = true, status = $1 WHERE id = $2', ['verified', orderId]);
         res.json({ success: true });
     } catch (error) {
         console.error('Verify order error:', error);
@@ -644,10 +644,10 @@ router.post('/change-password', async (req, res) => {
     }
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Get current admin password hash
-        const user = await db.get('SELECT password_hash FROM users WHERE role = ? LIMIT 1', ['admin']);
+        const user = await db.get('SELECT password_hash FROM users WHERE role = $1 LIMIT 1', ['admin']);
         if (!user) {
             return res.status(404).json({ error: 'Admin user not found' });
         }
@@ -663,7 +663,7 @@ router.post('/change-password', async (req, res) => {
         const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
         
         // Update password
-        await db.run('UPDATE users SET password_hash = ? WHERE role = ?', [newPasswordHash, 'admin']);
+        await db.run('UPDATE users SET password_hash = $1 WHERE role = $2', [newPasswordHash, 'admin']);
         res.json({ success: true, message: 'Password changed successfully' });
     } catch (error) {
         console.error('Change password error:', error);
@@ -674,7 +674,7 @@ router.post('/change-password', async (req, res) => {
 // Database Reset/Initialization
 router.post('/reset-database', async (req, res) => {
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Clear all data tables (but keep schema)
         try {
@@ -716,14 +716,14 @@ router.post('/reset-database', async (req, res) => {
         
         // Reset all users except admin to initial state
         try {
-            await db.run('DELETE FROM users WHERE role != ?', ['admin']);
+            await db.run('DELETE FROM users WHERE role != $1', ['admin']);
         } catch (err) {
             console.log('Error clearing non-admin users:', err.message);
         }
         
         // Reset admin balance to 0
         try {
-            await db.run('UPDATE users SET balance = 0 WHERE role = ?', ['admin']);
+            await db.run('UPDATE users SET balance = 0 WHERE role = $1', ['admin']);
         } catch (err) {
             console.log('Error resetting admin balance:', err.message);
         }
@@ -754,7 +754,7 @@ router.post('/reset-database', async (req, res) => {
         
         for (const team of teamUpdates) {
             try {
-                await db.run('UPDATE teams SET name = ? WHERE id = ?', [team.name, team.id]);
+                await db.run('UPDATE teams SET name = $1 WHERE id = $2', [team.name, team.id]);
             } catch (err) {
                 console.log(`Error updating team ${team.id}:`, err.message);
             }
@@ -770,7 +770,7 @@ router.post('/reset-database', async (req, res) => {
 // API endpoint to get all teams (for dynamic dropdowns)
 router.get('/api/teams', async (req, res) => {
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         const teams = await db.query('SELECT id, name FROM teams ORDER BY id');
         res.json({ teams });
     } catch (error) {

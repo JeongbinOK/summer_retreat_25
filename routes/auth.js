@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const { Database } = require('../database/config');
+const { PostgreSQLDatabase } = require('../database/postgres');
 
 const router = express.Router();
 
@@ -13,9 +13,9 @@ router.post('/login', async (req, res) => {
     }
     
     try {
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
-        const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+        const user = await db.get('SELECT * FROM users WHERE username = $1', [username]);
         
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
@@ -28,7 +28,7 @@ router.post('/login', async (req, res) => {
         }
         
         // Get team information
-        const team = user.team_id ? await db.get('SELECT name FROM teams WHERE id = ?', [user.team_id]) : null;
+        const team = user.team_id ? await db.get('SELECT name FROM teams WHERE id = $1', [user.team_id]) : null;
         
         req.session.user = {
             id: user.id,

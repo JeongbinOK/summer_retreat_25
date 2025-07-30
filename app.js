@@ -1,7 +1,7 @@
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
-const { initDatabase } = require('./database/init_universal');
+const { initDatabase } = require('./database/init_postgres');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -103,14 +103,14 @@ app.get('/dashboard', requireAuth, (req, res) => {
 
 // 🔍 DEBUG: Environment and database status endpoint
 app.get('/debug-status', requireAdmin, async (req, res) => {
-    const { Database, isProduction } = require('./database/config');
+    const { PostgreSQLDatabase } = require('./database/postgres');
     
     let dbTestResult = null;
     let actualDataCounts = null;
     
     try {
         // Test actual database connection
-        const db = new Database();
+        const db = new PostgreSQLDatabase();
         
         // Test connection with a simple query
         const testQuery = await db.query('SELECT 1 as test');
@@ -157,11 +157,10 @@ app.get('/debug-status', requireAdmin, async (req, res) => {
             DATABASE_URL_host: process.env.DATABASE_URL ? process.env.DATABASE_URL.split('@')[1]?.split('/')[0] : 'None',
             DATABASE_URL_type: process.env.DATABASE_URL ? 
                 (process.env.DATABASE_URL.startsWith('postgresql://') ? 'PostgreSQL' : 'Other') : 'None',
-            isProduction: isProduction,
             PORT: process.env.PORT
         },
         database: {
-            type: isProduction && process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite',
+            type: 'PostgreSQL',
             connection_test: dbTestResult,
             actual_data: actualDataCounts
         },
@@ -182,7 +181,7 @@ async function startServer() {
         app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
             console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Production)' : 'SQLite (Development)'}`);
+            console.log(`Database: PostgreSQL`);
             
             // Start keep-alive service in production
             if (process.env.NODE_ENV === 'production' && false) { // 🔴 임시 비활성화 for testing
