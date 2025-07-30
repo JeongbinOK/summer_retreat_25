@@ -41,14 +41,14 @@
                                 </thead>
                                 <tbody>
                                     <% codes.forEach(code => { %>
-                                        <tr class="<%= code.used ? 'table-light' : '' %>">
+                                        <tr class="<%= code.used_by ? 'table-light' : '' %>">
                                             <td>
                                                 <code><%= code.code %></code>
                                             </td>
                                             <td>$<%= code.amount %></td>
                                             <td>
-                                                <span class="badge bg-<%= code.used ? 'secondary' : 'success' %>">
-                                                    <%= code.used ? 'Used' : 'Available' %>
+                                                <span class="badge bg-<%= code.used_by ? 'secondary' : 'success' %>">
+                                                    <%= code.used_by ? 'Used' : 'Available' %>
                                                 </span>
                                             </td>
                                             <td><%= code.used_by_username || '-' %></td>

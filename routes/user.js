@@ -80,7 +80,7 @@ router.post('/redeem-code', async (req, res) => {
     try {
         await db.beginTransaction();
         
-        const moneyCode = await db.get('SELECT * FROM money_codes WHERE code = ? AND used = false', [code]);
+        const moneyCode = await db.get('SELECT * FROM money_codes WHERE code = ? AND used_by IS NULL', [code]);
         
         if (!moneyCode) {
             await db.rollback();
@@ -89,7 +89,7 @@ router.post('/redeem-code', async (req, res) => {
         
         // Mark code as used
         const now = new Date().toISOString();
-        await db.run('UPDATE money_codes SET used = true, used_by = ?, used_at = ? WHERE id = ?',
+        await db.run('UPDATE money_codes SET used_by = ?, used_at = ? WHERE id = ?',
             [req.session.user.id, now, moneyCode.id]);
         
         // Add money to user balance
