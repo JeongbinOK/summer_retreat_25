@@ -279,7 +279,7 @@ class UniversalDatabase {
             
             if (existingTeamCount < 6) {
                 console.log(`📋 Creating teams (current: ${existingTeamCount}, needed: 6)`);
-                const teams = ['A그룹', 'B그룹', 'C그룹', 'D그룹', 'E그룹', 'F그룹'];
+                const teams = ['A그룹', 'B그룹', 'C그룹', 'D그룹', 'E그룹', 'Z그룹'];
                 
                 for (let i = 0; i < teams.length; i++) {
                     const teamName = teams[i];
