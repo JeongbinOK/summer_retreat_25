@@ -138,9 +138,11 @@ async function startServer() {
             console.log(`Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Production)' : 'SQLite (Development)'}`);
             
             // Start keep-alive service in production
-            if (process.env.NODE_ENV === 'production') {
+            if (process.env.NODE_ENV === 'production' && false) { // 🔴 임시 비활성화 for testing
                 console.log('🚀 Starting keep-alive service to prevent sleep...');
                 require('./keep-alive');
+            } else if (process.env.NODE_ENV === 'production') {
+                console.log('⚠️ Keep-alive service DISABLED for testing data persistence');
             }
         });
     } catch (error) {
