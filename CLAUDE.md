@@ -56,4 +56,4 @@ A temporary 3-day web service for managing virtual currency, team-based purchasi
 - SQLite database is file-based (easy backup/restore)
 
 # Git commit ment
-- Don't use anything with Claude.
+- Don't write anything about Claude.

@@ -143,7 +143,7 @@ INSERT INTO teams (name) VALUES
     ('C그룹'),
     ('D그룹'),
     ('E그룹'),
-    ('F그룹')
+    ('Z그룹')
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert admin user (password: akftmaryghl)
