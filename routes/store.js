@@ -103,7 +103,7 @@ router.post('/purchase', async (req, res) => {
         await transaction.run(`INSERT INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id, created_at) 
             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
             ON CONFLICT (team_id, product_id) 
-            DO UPDATE SET quantity = quantity + EXCLUDED.quantity, 
+            DO UPDATE SET quantity = team_inventory.quantity + EXCLUDED.quantity, 
                           reference_id = EXCLUDED.reference_id, 
                           created_at = CURRENT_TIMESTAMP`,
             [req.session.user.team_id, product_id, quantity, 'purchase', orderId]);
@@ -209,7 +209,7 @@ router.post('/donate', async (req, res) => {
         await transaction.run(`INSERT INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id, created_at) 
             VALUES ($1, $2, $3, 'donation', $4, CURRENT_TIMESTAMP)
             ON CONFLICT (team_id, product_id) 
-            DO UPDATE SET quantity = quantity + EXCLUDED.quantity, 
+            DO UPDATE SET quantity = team_inventory.quantity + EXCLUDED.quantity, 
                           obtained_from = 'donation', 
                           reference_id = EXCLUDED.reference_id, 
                           created_at = CURRENT_TIMESTAMP`,
