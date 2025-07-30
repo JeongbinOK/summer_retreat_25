@@ -37,8 +37,15 @@ router.get('/rankings', async (req, res) => {
                         ELSE 0 
                     END), 0) as total_donated,
                     
-                    -- Current team balance (mainly team leaders hold money)
-                    COALESCE(SUM(u.balance), 0) as current_balance
+                    -- Current team balance (Total Earned - Total Spent)
+                    (COALESCE(SUM(CASE 
+                        WHEN tr.type = 'earn' THEN tr.amount 
+                        ELSE 0 
+                    END), 0) - 
+                    COALESCE(SUM(CASE 
+                        WHEN tr.type IN ('purchase', 'donation_sent') THEN ABS(tr.amount) 
+                        ELSE 0 
+                    END), 0)) as current_balance
                     
                 FROM teams t
                 LEFT JOIN users u ON t.id = u.team_id
