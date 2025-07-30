@@ -246,15 +246,15 @@ class UniversalDatabase {
             const adminPassword = await bcrypt.hash('akftmaryghl', 10);
             
             if (isProduction) {
-                // PostgreSQL: Use ON CONFLICT for upsert
+                // PostgreSQL: Use ON CONFLICT for upsert - DON'T UPDATE PASSWORD IF EXISTS
                 try {
                     await this.db.query(`
                         INSERT INTO users (username, password_hash, role, balance) 
                         VALUES ($1, $2, 'admin', 0)
                         ON CONFLICT (username) 
-                        DO UPDATE SET password_hash = $2
+                        DO NOTHING
                     `, ['admin', adminPassword]);
-                    console.log('✅ Admin user created/updated');
+                    console.log('✅ Admin user ensured (password preserved if existed)');
                 } catch (error) {
                     console.error('❌ Error creating admin user:', error.message);
                     throw error;
