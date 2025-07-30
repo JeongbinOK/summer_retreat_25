@@ -99,9 +99,26 @@ router.post('/purchase', async (req, res) => {
             }
         }
         
-        // Add items to team inventory
-        await db.run('INSERT INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id) VALUES (?, ?, ?, ?, ?)',
-            [req.session.user.team_id, product_id, quantity, 'purchase', orderId]);
+        // Add items to team inventory (UPSERT for PostgreSQL UNIQUE constraint compatibility)
+        if (db.isPostgres) {
+            // PostgreSQL: Use ON CONFLICT DO UPDATE
+            await db.run(`INSERT INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id, created_at) 
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT (team_id, product_id) 
+                DO UPDATE SET quantity = team_inventory.quantity + EXCLUDED.quantity, 
+                              reference_id = EXCLUDED.reference_id, 
+                              created_at = CURRENT_TIMESTAMP`,
+                [req.session.user.team_id, product_id, quantity, 'purchase', orderId]);
+        } else {
+            // SQLite: Use INSERT ... ON CONFLICT DO UPDATE (modern SQLite supports this)
+            await db.run(`INSERT INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id, created_at) 
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT (team_id, product_id) 
+                DO UPDATE SET quantity = quantity + EXCLUDED.quantity, 
+                              reference_id = EXCLUDED.reference_id, 
+                              created_at = CURRENT_TIMESTAMP`,
+                [req.session.user.team_id, product_id, quantity, 'purchase', orderId]);
+        }
         
         await db.commit();
         
@@ -201,10 +218,28 @@ router.post('/donate', async (req, res) => {
         await db.run('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
             [quantity, product_id]);
         
-        // 3. Add to recipient team inventory
-        await db.run(`INSERT OR REPLACE INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id) 
-                VALUES (?, ?, COALESCE((SELECT quantity FROM team_inventory WHERE team_id = ? AND product_id = ?), 0) + ?, 'donation', ?)`,
-            [recipient_team_id, product_id, recipient_team_id, product_id, quantity, 0]);
+        // 3. Add to recipient team inventory (UPSERT for PostgreSQL compatibility)
+        if (db.isPostgres) {
+            // PostgreSQL: Use ON CONFLICT DO UPDATE
+            await db.run(`INSERT INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id, created_at) 
+                VALUES (?, ?, ?, 'donation', ?, CURRENT_TIMESTAMP)
+                ON CONFLICT (team_id, product_id) 
+                DO UPDATE SET quantity = team_inventory.quantity + EXCLUDED.quantity, 
+                              obtained_from = 'donation', 
+                              reference_id = EXCLUDED.reference_id, 
+                              created_at = CURRENT_TIMESTAMP`,
+                [recipient_team_id, product_id, quantity, 0]);
+        } else {
+            // SQLite: Use INSERT ... ON CONFLICT DO UPDATE
+            await db.run(`INSERT INTO team_inventory (team_id, product_id, quantity, obtained_from, reference_id, created_at) 
+                VALUES (?, ?, ?, 'donation', ?, CURRENT_TIMESTAMP)
+                ON CONFLICT (team_id, product_id) 
+                DO UPDATE SET quantity = quantity + EXCLUDED.quantity, 
+                              obtained_from = 'donation', 
+                              reference_id = EXCLUDED.reference_id, 
+                              created_at = CURRENT_TIMESTAMP`,
+                [recipient_team_id, product_id, quantity, 0]);
+        }
         
         // 4. Create donation record
         const donationResult = await db.run('INSERT INTO donations (donor_id, recipient_id, product_id, amount, quantity, message, donor_team_id, recipient_team_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

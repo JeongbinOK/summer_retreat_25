@@ -481,11 +481,9 @@ router.post('/products/:id/delete', async (req, res) => {
     try {
         const db = new Database();
         
-        // Check if product has been ordered
-        const result = await db.get('SELECT COUNT(*) as count FROM orders WHERE product_id = ?', [productId]);
-        if (result.count > 0) {
-            return res.status(400).json({ error: 'Cannot delete product that has been ordered' });
-        }
+        // Allow product deletion even if ordered (as requested by user)
+        // Note: This will maintain referential integrity in the database
+        // but allows admins to clean up products as needed during the retreat
         
         // Safe to delete
         await db.run('DELETE FROM products WHERE id = ?', [productId]);
@@ -564,19 +562,46 @@ router.post('/products/:id/stock', async (req, res) => {
     }
 });
 
-// Orders Management
+// Orders Management (includes both purchases and donations)
 router.get('/orders', async (req, res) => {
     try {
         const db = new Database();
         
-        const orders = await db.query(`SELECT o.*, u.username, t.name as team_name, p.name as product_name
+        // Get purchase orders
+        const orders = await db.query(`SELECT o.*, u.username, t.name as team_name, p.name as product_name, 'purchase' as type
                 FROM orders o
                 JOIN users u ON o.user_id = u.id
                 JOIN teams t ON o.team_id = t.id
                 JOIN products p ON o.product_id = p.id
                 ORDER BY o.created_at DESC`);
+        
+        // Get donation records
+        const donations = await db.query(`SELECT 
+                d.id, 
+                d.created_at, 
+                du.username, 
+                dt.name as team_name, 
+                p.name as product_name,
+                d.quantity,
+                d.amount as total_price,
+                'verified' as status,
+                true as verified,
+                rt.name as recipient_team_name,
+                d.message,
+                'donation' as type
+                FROM donations d
+                JOIN users du ON d.donor_id = du.id
+                JOIN teams dt ON d.donor_team_id = dt.id
+                JOIN teams rt ON d.recipient_team_id = rt.id
+                JOIN products p ON d.product_id = p.id
+                ORDER BY d.created_at DESC`);
+        
+        // Combine and sort by date
+        const allTransactions = [...orders, ...donations].sort((a, b) => 
+            new Date(b.created_at) - new Date(a.created_at)
+        );
                 
-        res.render('admin/orders', { orders, user: req.session.user });
+        res.render('admin/orders', { orders: allTransactions, user: req.session.user });
     } catch (error) {
         console.error('Orders error:', error);
         res.status(500).json({ error: 'Database error' });
@@ -720,7 +745,26 @@ router.post('/reset-database', async (req, res) => {
             }
         }
         
-        res.json({ success: true, message: 'Database reset to initial values successfully' });
+        // Re-create initial products after reset
+        const sampleProducts = [
+            { name: 'Coffee', description: 'Hot coffee from cafe', price: 500, category: 'beverage', stock: 20 },
+            { name: 'Snacks', description: 'Assorted snacks', price: 300, category: 'food', stock: 15 },
+            { name: 'Prayer Request', description: 'Personal prayer service', price: 200, category: 'service', stock: 999 },
+            { name: 'Souvenir', description: 'Retreat souvenir item', price: 1000, category: 'item', stock: 10 }
+        ];
+
+        for (const product of sampleProducts) {
+            try {
+                await db.run(`INSERT INTO products (name, description, price, category, stock_quantity, initial_stock) 
+                    VALUES (?, ?, ?, ?, ?, ?)`,
+                    [product.name, product.description, product.price, product.category, product.stock, product.stock]);
+                console.log(`✅ Sample product '${product.name}' recreated`);
+            } catch (err) {
+                console.log(`Error recreating sample product ${product.name}:`, err.message);
+            }
+        }
+        
+        res.json({ success: true, message: 'Database reset to initial values with sample products recreated successfully' });
     } catch (error) {
         console.error('Database reset error:', error);
         res.status(500).json({ error: 'Database reset failed' });

@@ -16,8 +16,8 @@
     <main class="container mt-4">
         <div class="row">
             <div class="col-md-12">
-                <h2>Order Verification</h2>
-                <p>Review and verify participant purchases for fulfillment</p>
+                <h2>Purchase and Donation Management</h2>
+                <p>Review and verify participant purchases and team donations</p>
                 
                 <div id="orders-alert"></div>
                 
@@ -27,11 +27,12 @@
                             <table class="table">
                                 <thead>
                                     <tr>
-                                        <th>Order #</th>
-                                        <th>Customer</th>
-                                        <th>Team</th>
+                                        <th>ID</th>
+                                        <th>Type</th>
+                                        <th>From</th>
+                                        <th>To</th>
                                         <th>Product</th>
-                                        <th>Quantity</th>
+                                        <th>Qty</th>
                                         <th>Total</th>
                                         <th>Status</th>
                                         <th>Date</th>
@@ -40,21 +41,46 @@
                                 </thead>
                                 <tbody>
                                     <% orders.forEach(order => { %>
-                                        <tr class="<%= order.verified ? 'table-success' : '' %>">
+                                        <tr class="<%= order.verified ? 'table-success' : order.type === 'donation' ? 'table-info' : '' %>">
                                             <td>#<%= order.id %></td>
-                                            <td><%= order.username %></td>
-                                            <td><%= order.team_name %></td>
+                                            <td>
+                                                <% if (order.type === 'donation') { %>
+                                                    <span class="badge bg-info">🎁 Donation</span>
+                                                <% } else { %>
+                                                    <span class="badge bg-primary">🛒 Purchase</span>
+                                                <% } %>
+                                            </td>
+                                            <td>
+                                                <%= order.username %><br>
+                                                <small class="text-muted"><%= order.team_name %></small>
+                                            </td>
+                                            <td>
+                                                <% if (order.type === 'donation') { %>
+                                                    <strong><%= order.recipient_team_name %></strong>
+                                                    <% if (order.message) { %>
+                                                        <br><small class="text-muted">"<%= order.message %>"</small>
+                                                    <% } %>
+                                                <% } else { %>
+                                                    <span class="text-muted">Self</span>
+                                                <% } %>
+                                            </td>
                                             <td><%= order.product_name %></td>
                                             <td><%= order.quantity %></td>
                                             <td>$<%= order.total_price %></td>
                                             <td>
-                                                <span class="badge bg-<%= order.verified ? 'success' : order.status === 'pending' ? 'warning' : 'secondary' %>">
-                                                    <%= order.verified ? 'Verified' : order.status %>
-                                                </span>
+                                                <% if (order.type === 'donation') { %>
+                                                    <span class="badge bg-success">Completed</span>
+                                                <% } else { %>
+                                                    <span class="badge bg-<%= order.verified ? 'success' : order.status === 'pending' ? 'warning' : 'secondary' %>">
+                                                        <%= order.verified ? 'Verified' : order.status %>
+                                                    </span>
+                                                <% } %>
                                             </td>
                                             <td><%= formatDate(order.created_at) %></td>
                                             <td>
-                                                <% if (!order.verified) { %>
+                                                <% if (order.type === 'donation') { %>
+                                                    <span class="text-info">🎁 Donation</span>
+                                                <% } else if (!order.verified) { %>
                                                     <button class="btn btn-sm btn-success" 
                                                             onclick="verifyOrder(<%= order.id %>)">
                                                         Verify

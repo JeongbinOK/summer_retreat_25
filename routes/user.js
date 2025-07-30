@@ -191,11 +191,26 @@ router.get('/team', async (req, res) => {
             });
         }
         
+        // Get donations received by this team
+        const receivedDonations = await db.query(`SELECT 
+                d.*,
+                p.name as product_name,
+                dt.name as donor_team_name,
+                du.username as donor_username
+            FROM donations d
+            JOIN products p ON d.product_id = p.id
+            JOIN teams dt ON d.donor_team_id = dt.id
+            JOIN users du ON d.donor_id = du.id
+            WHERE d.recipient_team_id = ?
+            ORDER BY d.created_at DESC
+            LIMIT 10`, [req.session.user.team_id]);
+        
         res.render('user/team', { 
             user: req.session.user, 
             teamMembers: members, 
             teamInfo: team,
-            financialData: financialData
+            financialData: financialData,
+            receivedDonations: receivedDonations
         });
     } catch (err) {
         console.error('Team info error:', err);
@@ -271,7 +286,7 @@ router.get('/team-inventory', async (req, res) => {
                     p.category,
                     SUM(ti.quantity) as total_quantity,
                     COUNT(DISTINCT ti.id) as entries_count,
-                    MAX(ti.obtained_at) as last_obtained
+                    MAX(ti.created_at) as last_obtained
                 FROM team_inventory ti
                 JOIN products p ON ti.product_id = p.id
                 WHERE ti.team_id = ? AND ti.quantity > 0
@@ -286,7 +301,7 @@ router.get('/team-inventory', async (req, res) => {
                 FROM team_inventory ti
                 JOIN products p ON ti.product_id = p.id
                 WHERE ti.team_id = ? AND ti.quantity > 0
-                ORDER BY ti.obtained_at DESC`, [req.session.user.team_id]);
+                ORDER BY ti.created_at DESC`, [req.session.user.team_id]);
         
         res.render('user/team-inventory', { 
             user: req.session.user, 

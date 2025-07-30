@@ -142,7 +142,7 @@
                                     <tbody>
                                         <% inventoryHistory.forEach(entry => { %>
                                             <tr>
-                                                <td><%= formatDate(entry.obtained_at) %></td>
+                                                <td><%= formatDate(entry.created_at) %></td>
                                                 <td><%= entry.product_name %></td>
                                                 <td><%= entry.quantity %></td>
                                                 <td>

@@ -143,6 +143,46 @@
                                     </div>
                                 </div>
                             </div>
+                            
+                            <!-- Received Donations Section -->
+                            <% if (receivedDonations && receivedDonations.length > 0) { %>
+                            <div class="mt-4">
+                                <h6>🎁 Recent Donations Received</h6>
+                                <div class="row">
+                                    <% receivedDonations.forEach(donation => { %>
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card border-info">
+                                                <div class="card-body">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <h6 class="card-title text-info">
+                                                            <%= donation.product_name %> x<%= donation.quantity %>
+                                                        </h6>
+                                                        <span class="badge bg-info">$<%= donation.amount %></span>
+                                                    </div>
+                                                    <p class="mb-1">
+                                                        <strong>From:</strong> <%= donation.donor_team_name %> 
+                                                        (<%= donation.donor_username %>)
+                                                    </p>
+                                                    <% if (donation.message && donation.message.trim()) { %>
+                                                        <div class="alert alert-light p-2 mt-2">
+                                                            <small><em>"<%= donation.message %>"</em></small>
+                                                        </div>
+                                                    <% } %>
+                                                    <small class="text-muted">
+                                                        Received: <%= formatDate(donation.created_at) %>
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <% }); %>
+                                </div>
+                                <div class="text-center">
+                                    <small class="text-muted">
+                                        Showing last 10 donations • Check <a href="/user/team-inventory">Team Inventory</a> for all items
+                                    </small>
+                                </div>
+                            </div>
+                            <% } %>
                         <% } %>
                     </div>
                 </div>
