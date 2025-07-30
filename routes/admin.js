@@ -359,19 +359,27 @@ router.post('/money-codes', async (req, res) => {
     
     try {
         const db = new Database();
-        const codes = [];
         
-        // Generate unique codes
-        for (let i = 0; i < quantity; i++) {
-            const code = 'RC' + Date.now() + Math.random().toString(36).substr(2, 6);
-            codes.push([code, amount]);
+        await db.beginTransaction();
+        
+        try {
+            let generated = 0;
+            
+            // Insert codes one by one for PostgreSQL compatibility
+            for (let i = 0; i < quantity; i++) {
+                const code = 'RC' + Date.now() + Math.random().toString(36).substr(2, 6);
+                await db.run('INSERT INTO money_codes (code, amount) VALUES (?, ?)', [code, amount]);
+                generated++;
+            }
+            
+            await db.commit();
+            res.json({ success: true, generated: generated });
+            
+        } catch (transactionError) {
+            await db.rollback();
+            throw transactionError;
         }
         
-        const placeholders = codes.map(() => '(?, ?)').join(', ');
-        const flatCodes = codes.flat();
-        
-        await db.run(`INSERT INTO money_codes (code, amount) VALUES ${placeholders}`, flatCodes);
-        res.json({ success: true, generated: quantity });
     } catch (error) {
         console.error('Create money code error:', error);
         res.status(500).json({ error: 'Database error' });
@@ -581,7 +589,7 @@ router.post('/orders/:id/verify', async (req, res) => {
     try {
         const db = new Database();
         
-        await db.run('UPDATE orders SET verified = 1, status = ? WHERE id = ?', ['verified', orderId]);
+        await db.run('UPDATE orders SET verified = true, status = ? WHERE id = ?', ['verified', orderId]);
         res.json({ success: true });
     } catch (error) {
         console.error('Verify order error:', error);

@@ -113,12 +113,26 @@ class Database {
             if (this.isPostgres) {
                 // PostgreSQL - convert ? to $1, $2, etc.
                 const { sql: convertedSql, params: convertedParams } = this.convertSqlForPostgres(sql, params);
-                db.query(convertedSql, convertedParams, (err, result) => {
+                
+                // For INSERT queries, add RETURNING id to get the inserted ID
+                let finalSql = convertedSql;
+                if (convertedSql.toLowerCase().trim().startsWith('insert') && !convertedSql.toLowerCase().includes('returning')) {
+                    finalSql = convertedSql + ' RETURNING id';
+                }
+                
+                db.query(finalSql, convertedParams, (err, result) => {
                     if (err) {
                         reject(err);
                     } else {
+                        let lastID = null;
+                        
+                        // If it's an INSERT with RETURNING, get the returned ID
+                        if (result.rows && result.rows.length > 0 && result.rows[0].id) {
+                            lastID = result.rows[0].id;
+                        }
+                        
                         resolve({
-                            lastID: result.insertId || null,
+                            lastID: lastID,
                             changes: result.rowCount || 0
                         });
                     }
