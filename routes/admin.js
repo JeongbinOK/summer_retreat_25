@@ -97,10 +97,34 @@ router.post('/users', async (req, res) => {
         const passwordHash = await bcrypt.hash(password, 10);
         const db = new Database();
         
-        const result = await db.run('INSERT INTO users (username, password_hash, role, team_id) VALUES (?, ?, ?, ?)',
-            [username, passwordHash, role, team_id || null]);
+        // Start transaction for team leader assignment
+        await db.beginTransaction();
+        
+        try {
+            // Create the user
+            const result = await db.run('INSERT INTO users (username, password_hash, role, team_id) VALUES (?, ?, ?, ?)',
+                [username, passwordHash, role, team_id || null]);
             
-        res.json({ success: true, userId: result.lastID });
+            const userId = result.lastID;
+            
+            // If the user is assigned as team_leader and has a team_id, update team leadership
+            if (role === 'team_leader' && team_id) {
+                // First, remove previous leader role from other users in the same team
+                await db.run('UPDATE users SET role = ? WHERE team_id = ? AND role = ? AND id != ?', 
+                    ['participant', team_id, 'team_leader', userId]);
+                
+                // Update the team's leader_id
+                await db.run('UPDATE teams SET leader_id = ? WHERE id = ?', [userId, team_id]);
+            }
+            
+            await db.commit();
+            res.json({ success: true, userId: userId });
+            
+        } catch (error) {
+            await db.rollback();
+            throw error;
+        }
+        
     } catch (error) {
         console.error('Create user error:', error);
         if (error.message && error.message.includes('duplicate key') || error.code === '23505') {
@@ -146,24 +170,53 @@ router.post('/users/:id/edit', async (req, res) => {
             updateParams = [username, role, team_id || null, newBalance, userId];
         }
         
-        await db.run(updateQuery, updateParams);
+        await db.beginTransaction();
         
-        // Log balance change if it occurred
-        if (balanceChanged) {
-            const balanceDifference = newBalance - currentBalance;
-            const description = balanceDifference > 0 
-                ? `Admin added $${balanceDifference} to balance` 
-                : `Admin removed $${Math.abs(balanceDifference)} from balance`;
+        try {
+            // Get original user data to check role/team changes
+            const originalUser = await db.get('SELECT role, team_id FROM users WHERE id = ?', [userId]);
+            
+            await db.run(updateQuery, updateParams);
+            
+            // Handle team leadership changes
+            const roleChanged = originalUser.role !== role;
+            const teamChanged = originalUser.team_id !== (team_id || null);
+            
+            if (roleChanged || teamChanged) {
+                // If user was previously a team leader, remove leadership from teams table
+                if (originalUser.role === 'team_leader' && originalUser.team_id) {
+                    await db.run('UPDATE teams SET leader_id = NULL WHERE leader_id = ?', [userId]);
+                }
                 
-            try {
+                // If user is now a team leader and has a team, assign leadership
+                if (role === 'team_leader' && team_id) {
+                    // Remove leadership from other users in the same team
+                    await db.run('UPDATE users SET role = ? WHERE team_id = ? AND role = ? AND id != ?', 
+                        ['participant', team_id, 'team_leader', userId]);
+                    
+                    // Assign leadership in teams table
+                    await db.run('UPDATE teams SET leader_id = ? WHERE id = ?', [userId, team_id]);
+                }
+            }
+            
+            // Log balance change if it occurred
+            if (balanceChanged) {
+                const balanceDifference = newBalance - currentBalance;
+                const description = balanceDifference > 0 
+                    ? `Admin added $${balanceDifference} to balance` 
+                    : `Admin removed $${Math.abs(balanceDifference)} from balance`;
+                    
                 await db.run('INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)',
                     [userId, 'admin_adjustment', balanceDifference, description]);
-            } catch (err) {
-                console.log('Error logging balance change:', err.message);
             }
+            
+            await db.commit();
+            res.json({ success: true });
+            
+        } catch (transactionError) {
+            await db.rollback();
+            throw transactionError;
         }
-        
-        res.json({ success: true });
     } catch (error) {
         console.error('Edit user error:', error);
         if (error.message && (error.message.includes('UNIQUE constraint failed') || error.message.includes('duplicate key'))) {
