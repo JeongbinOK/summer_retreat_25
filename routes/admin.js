@@ -702,16 +702,15 @@ router.post('/reset-database', (req, res) => {
 });
 
 // API endpoint to get all teams (for dynamic dropdowns)
-router.get('/api/teams', (req, res) => {
-    const db = new sqlite3.Database(dbPath);
-    
-    db.all('SELECT id, name FROM teams ORDER BY id', (err, teams) => {
-        db.close();
-        if (err) {
-            return res.status(500).json({ error: 'Database error' });
-        }
+router.get('/api/teams', async (req, res) => {
+    try {
+        const db = new Database();
+        const teams = await db.query('SELECT id, name FROM teams ORDER BY id');
         res.json({ teams });
-    });
+    } catch (error) {
+        console.error('Teams API error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 module.exports = router;
