@@ -122,11 +122,28 @@ app.get('/debug-status', requireAdmin, async (req, res) => {
         const products = await db.query('SELECT COUNT(*) as count FROM products');
         const transactions = await db.query('SELECT COUNT(*) as count FROM transactions');
         
+        // Get detailed team and user info for debugging
+        const teamDetails = await db.query(`
+            SELECT t.id, t.name, t.leader_id, u.username as leader_name, u.role as leader_role
+            FROM teams t 
+            LEFT JOIN users u ON t.leader_id = u.id
+            ORDER BY t.id
+        `);
+        
+        const usersByRole = await db.query(`
+            SELECT role, COUNT(*) as count 
+            FROM users 
+            GROUP BY role 
+            ORDER BY role
+        `);
+        
         actualDataCounts = {
             users: users[0]?.count || 0,
             teams: teams[0]?.count || 0,
             products: products[0]?.count || 0,
-            transactions: transactions[0]?.count || 0
+            transactions: transactions[0]?.count || 0,
+            team_details: teamDetails,
+            users_by_role: usersByRole
         };
         
     } catch (error) {

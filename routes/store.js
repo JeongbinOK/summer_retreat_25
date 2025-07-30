@@ -191,7 +191,7 @@ router.post('/donate', async (req, res) => {
         }
         
         // Get recipient team leader
-        const recipientLeader = await db.get('SELECT id FROM users WHERE team_id = ? AND role = "team_leader"', [recipient_team_id]);
+        const recipientLeader = await db.get('SELECT id FROM users WHERE team_id = ? AND role = 'team_leader'', [recipient_team_id]);
         
         // 1. Deduct money from donor's balance
         await db.run('UPDATE users SET balance = balance - ? WHERE id = ?',

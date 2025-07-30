@@ -283,17 +283,34 @@ router.post('/teams/:id/leader', async (req, res) => {
     const { leader_id } = req.body;
     const teamId = req.params.id;
     
+    if (!leader_id) {
+        return res.status(400).json({ error: 'Leader ID is required' });
+    }
+    
     try {
         const db = new Database();
         
-        // Remove previous leader role
-        await db.run('UPDATE users SET role = "participant" WHERE team_id = ? AND role = "team_leader"', [teamId]);
+        await db.beginTransaction();
         
-        // Set new leader
-        await db.run('UPDATE teams SET leader_id = ? WHERE id = ?', [leader_id, teamId]);
-        await db.run('UPDATE users SET role = "team_leader" WHERE id = ?', [leader_id]);
+        try {
+            // Remove previous leader role from all users in this team
+            await db.run('UPDATE users SET role = ? WHERE team_id = ? AND role = ?', 
+                ['participant', teamId, 'team_leader']);
+            
+            // Set new leader in teams table
+            await db.run('UPDATE teams SET leader_id = ? WHERE id = ?', [leader_id, teamId]);
+            
+            // Set new leader role in users table
+            await db.run('UPDATE users SET role = ? WHERE id = ?', ['team_leader', leader_id]);
+            
+            await db.commit();
+            res.json({ success: true });
+            
+        } catch (transactionError) {
+            await db.rollback();
+            throw transactionError;
+        }
         
-        res.json({ success: true });
     } catch (error) {
         console.error('Update team leader error:', error);
         res.status(500).json({ error: 'Database error' });
@@ -564,7 +581,7 @@ router.post('/orders/:id/verify', async (req, res) => {
     try {
         const db = new Database();
         
-        await db.run('UPDATE orders SET verified = 1, status = "verified" WHERE id = ?', [orderId]);
+        await db.run('UPDATE orders SET verified = 1, status = 'verified' WHERE id = ?', [orderId]);
         res.json({ success: true });
     } catch (error) {
         console.error('Verify order error:', error);
@@ -588,7 +605,7 @@ router.post('/change-password', async (req, res) => {
         const db = new Database();
         
         // Get current admin password hash
-        const user = await db.get('SELECT password_hash FROM users WHERE role = "admin" LIMIT 1');
+        const user = await db.get('SELECT password_hash FROM users WHERE role = 'admin' LIMIT 1');
         if (!user) {
             return res.status(404).json({ error: 'Admin user not found' });
         }
@@ -604,7 +621,7 @@ router.post('/change-password', async (req, res) => {
         const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
         
         // Update password
-        await db.run('UPDATE users SET password_hash = ? WHERE role = "admin"', [newPasswordHash]);
+        await db.run('UPDATE users SET password_hash = ? WHERE role = 'admin'', [newPasswordHash]);
         res.json({ success: true, message: 'Password changed successfully' });
     } catch (error) {
         console.error('Change password error:', error);
@@ -650,14 +667,14 @@ router.post('/reset-database', async (req, res) => {
         
         // Reset all users except admin to initial state
         try {
-            await db.run('DELETE FROM users WHERE role != "admin"');
+            await db.run('DELETE FROM users WHERE role != 'admin'');
         } catch (err) {
             console.log('Error clearing non-admin users:', err.message);
         }
         
         // Reset admin balance to 0
         try {
-            await db.run('UPDATE users SET balance = 0 WHERE role = "admin"');
+            await db.run('UPDATE users SET balance = 0 WHERE role = 'admin'');
         } catch (err) {
             console.log('Error resetting admin balance:', err.message);
         }
