@@ -8,7 +8,7 @@ router.get('/', async (req, res) => {
     const db = new Database();
     
     try {
-        const products = await db.query('SELECT * FROM products WHERE is_active = 1 ORDER BY category, name');
+        const products = await db.query('SELECT * FROM products WHERE is_active = true ORDER BY category, name');
         
         // Ensure stock_quantity defaults to 0 if null/undefined
         const processedProducts = products.map(product => ({
@@ -42,7 +42,7 @@ router.post('/purchase', async (req, res) => {
         await db.beginTransaction();
         
         // Get product details
-        const product = await db.get('SELECT * FROM products WHERE id = ? AND is_active = 1', [product_id]);
+        const product = await db.get('SELECT * FROM products WHERE id = ? AND is_active = true', [product_id]);
         
         if (!product) {
             await db.rollback();
@@ -162,7 +162,7 @@ router.post('/donate', async (req, res) => {
         await db.beginTransaction();
         
         // Check if product exists and has stock
-        const product = await db.get('SELECT * FROM products WHERE id = ? AND is_active = 1', [product_id]);
+        const product = await db.get('SELECT * FROM products WHERE id = ? AND is_active = true', [product_id]);
         
         if (!product) {
             await db.rollback();
@@ -287,7 +287,7 @@ router.get('/donation-products', async (req, res) => {
     const db = new Database();
     
     try {
-        const products = await db.query('SELECT id, name, price, stock_quantity, category FROM products WHERE is_active = 1 AND stock_quantity > 0 ORDER BY category, name');
+        const products = await db.query('SELECT id, name, price, stock_quantity, category FROM products WHERE is_active = true AND stock_quantity > 0 ORDER BY category, name');
         res.json({ products });
     } catch (err) {
         console.error('Donation products error:', err);

@@ -210,12 +210,12 @@ router.get('/teams', async (req, res) => {
     try {
         const db = new Database();
         
-        const teams = await db.query(`SELECT t.*, u.username as leader_name,
+        const teams = await db.query(`SELECT t.id, t.name, t.leader_id, t.created_at, u.username as leader_name,
                        COUNT(m.id) as member_count
                 FROM teams t 
                 LEFT JOIN users u ON t.leader_id = u.id
                 LEFT JOIN users m ON t.id = m.team_id
-                GROUP BY t.id
+                GROUP BY t.id, t.name, t.leader_id, t.created_at, u.username
                 ORDER BY t.name`);
                 
         res.render('admin/teams', { teams, user: req.session.user });
@@ -354,7 +354,7 @@ router.post('/products/:id/toggle', async (req, res) => {
     try {
         const db = new Database();
         
-        await db.run('UPDATE products SET is_active = ? WHERE id = ?', [is_active ? 1 : 0, productId]);
+        await db.run('UPDATE products SET is_active = ? WHERE id = ?', [is_active ? true : false, productId]);
         res.json({ success: true });
     } catch (error) {
         console.error('Toggle product error:', error);
@@ -440,7 +440,7 @@ router.post('/products/:id/stock', async (req, res) => {
             // Auto-reactivate product if stock is now available
             if (adjustment > 0) {
                 try {
-                    await db.run('UPDATE products SET is_active = 1 WHERE id = ?', [productId]);
+                    await db.run('UPDATE products SET is_active = true WHERE id = ?', [productId]);
                 } catch (err) {
                     console.log('Error auto-reactivating restocked product:', err.message);
                 }
@@ -464,14 +464,14 @@ router.post('/products/:id/stock', async (req, res) => {
             // Auto-reactivate if stock is now available and was previously 0
             if (newStock > 0 && product.stock_quantity <= 0) {
                 try {
-                    await db.run('UPDATE products SET is_active = 1 WHERE id = ?', [productId]);
+                    await db.run('UPDATE products SET is_active = true WHERE id = ?', [productId]);
                 } catch (err) {
                     console.log('Error auto-reactivating restocked product:', err.message);
                 }
             } else if (newStock <= 0) {
                 // Auto-deactivate if stock is now 0
                 try {
-                    await db.run('UPDATE products SET is_active = 0 WHERE id = ?', [productId]);
+                    await db.run('UPDATE products SET is_active = false WHERE id = ?', [productId]);
                 } catch (err) {
                     console.log('Error auto-deactivating out of stock product:', err.message);
                 }
