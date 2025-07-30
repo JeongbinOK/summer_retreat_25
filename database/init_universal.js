@@ -265,25 +265,37 @@ class UniversalDatabase {
                 `, [adminPassword]);
             }
 
-            // Create sample teams (Korean names)
-            const teams = ['A그룹', 'B그룹', 'C그룹', 'D그룹', 'E그룹', 'F그룹'];
+            // Create sample teams (Korean names) - Only if less than 6 teams exist
+            const existingTeamCount = (await this.db.query('SELECT COUNT(*) as count FROM teams'))[0]?.count || 0;
             
-            for (let i = 0; i < teams.length; i++) {
-                const teamName = teams[i];
-                const teamId = i + 1;
+            if (existingTeamCount < 6) {
+                console.log(`📋 Creating teams (current: ${existingTeamCount}, needed: 6)`);
+                const teams = ['A그룹', 'B그룹', 'C그룹', 'D그룹', 'E그룹', 'F그룹'];
                 
-                if (isProduction) {
-                    // PostgreSQL
-                    await this.db.query(`
-                        INSERT INTO teams (name) VALUES ($1)
-                        ON CONFLICT DO NOTHING
-                    `, [teamName]);
-                } else {
-                    // SQLite
-                    await this.db.run(`
-                        INSERT OR IGNORE INTO teams (id, name) VALUES (?, ?)
-                    `, [teamId, teamName]);
+                for (let i = 0; i < teams.length; i++) {
+                    const teamName = teams[i];
+                    const teamId = i + 1;
+                    
+                    try {
+                        if (isProduction) {
+                            // PostgreSQL
+                            await this.db.query(`
+                                INSERT INTO teams (name) VALUES ($1)
+                                ON CONFLICT (name) DO NOTHING
+                            `, [teamName]);
+                        } else {
+                            // SQLite
+                            await this.db.run(`
+                                INSERT OR IGNORE INTO teams (id, name) VALUES (?, ?)
+                            `, [teamId, teamName]);
+                        }
+                        console.log(`✅ Team '${teamName}' ensured`);
+                    } catch (error) {
+                        console.warn(`Warning creating team ${teamName}:`, error.message);
+                    }
                 }
+            } else {
+                console.log(`✅ Teams already exist (${existingTeamCount}), skipping creation`);
             }
 
             // Create sample products
@@ -298,30 +310,42 @@ class UniversalDatabase {
     }
 
     async createSampleProducts() {
-        const sampleProducts = [
-            { name: 'Coffee', description: 'Hot coffee from cafe', price: 500, category: 'beverage', stock: 20 },
-            { name: 'Snacks', description: 'Assorted snacks', price: 300, category: 'food', stock: 15 },
-            { name: 'Prayer Request', description: 'Personal prayer service', price: 200, category: 'service', stock: 999 },
-            { name: 'Souvenir', description: 'Retreat souvenir item', price: 1000, category: 'item', stock: 10 }
-        ];
+        // Only create products if less than 4 exist
+        const existingProductCount = (await this.db.query('SELECT COUNT(*) as count FROM products'))[0]?.count || 0;
+        
+        if (existingProductCount < 4) {
+            console.log(`📦 Creating products (current: ${existingProductCount}, needed: 4)`);
+            
+            const sampleProducts = [
+                { name: 'Coffee', description: 'Hot coffee from cafe', price: 500, category: 'beverage', stock: 20 },
+                { name: 'Snacks', description: 'Assorted snacks', price: 300, category: 'food', stock: 15 },
+                { name: 'Prayer Request', description: 'Personal prayer service', price: 200, category: 'service', stock: 999 },
+                { name: 'Souvenir', description: 'Retreat souvenir item', price: 1000, category: 'item', stock: 10 }
+            ];
 
-        for (const product of sampleProducts) {
-            try {
-                // Check if product already exists
-                const existing = await this.db.get(
-                    'SELECT id FROM products WHERE name = ?', 
-                    [product.name]
-                );
+            for (const product of sampleProducts) {
+                try {
+                    // Check if product already exists
+                    const existing = await this.db.get(
+                        'SELECT id FROM products WHERE name = ?', 
+                        [product.name]
+                    );
 
-                if (!existing) {
-                    await this.db.run(`
-                        INSERT INTO products (name, description, price, category, stock_quantity, initial_stock) 
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    `, [product.name, product.description, product.price, product.category, product.stock, product.stock]);
+                    if (!existing) {
+                        await this.db.run(`
+                            INSERT INTO products (name, description, price, category, stock_quantity, initial_stock) 
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        `, [product.name, product.description, product.price, product.category, product.stock, product.stock]);
+                        console.log(`✅ Product '${product.name}' created`);
+                    } else {
+                        console.log(`⚠️ Product '${product.name}' already exists`);
+                    }
+                } catch (error) {
+                    console.warn(`Warning creating sample product ${product.name}:`, error.message);
                 }
-            } catch (error) {
-                console.warn(`Warning creating sample product ${product.name}:`, error.message);
             }
+        } else {
+            console.log(`✅ Products already exist (${existingProductCount}), skipping creation`);
         }
     }
 

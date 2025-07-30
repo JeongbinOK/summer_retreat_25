@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Teams table (create second, can reference users now)
 CREATE TABLE IF NOT EXISTS teams (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) UNIQUE NOT NULL,
     leader_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -136,7 +136,7 @@ ALTER TABLE donations ADD CONSTRAINT fk_donations_recipient_team
 ALTER TABLE donations ADD CONSTRAINT fk_donations_product 
     FOREIGN KEY (product_id) REFERENCES products(id);
 
--- Insert initial teams (Korean names)
+-- Insert initial teams (Korean names) - Only if they don't exist
 INSERT INTO teams (name) VALUES 
     ('A그룹'),
     ('B그룹'),
@@ -144,7 +144,7 @@ INSERT INTO teams (name) VALUES
     ('D그룹'),
     ('E그룹'),
     ('F그룹')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 -- Insert admin user (password: akftmaryghl)
 INSERT INTO users (username, password_hash, role, balance) VALUES 
