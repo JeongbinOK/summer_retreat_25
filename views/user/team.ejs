@@ -1,13 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Team - Church Retreat 2025</title>
+    <title>내 팀 - 2025 말씀교회 여름수련회</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        body { 
+            font-family: 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
         .navbar-brand { font-weight: bold; }
         .balance-badge { font-size: 1.1em; }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            border: none;
+            padding: 20px;
+        }
+        .btn {
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -22,23 +57,26 @@
                             <% if (teamInfo) { %>
                                 <%= teamInfo.name %>
                             <% } else { %>
-                                No Team Assigned
+                                팀이 지정되지 않음
                             <% } %>
                         </h5>
                         <% if (teamInfo) { %>
                             <div class="btn-group" role="group">
                                 <a href="/user/team-inventory" class="btn btn-primary btn-sm">
-                                    Team Inventory
+                                    <i class="fas fa-boxes me-1"></i>팀 인벤토리
                                 </a>
                                 <a href="/user/team-purchases" class="btn btn-outline-primary btn-sm">
-                                    Purchase History
+                                    <i class="fas fa-history me-1"></i>구매 내역
                                 </a>
                             </div>
                         <% } %>
                     </div>
                     <div class="card-body">
                         <% if (!teamInfo) { %>
-                            <p class="text-muted">You haven't been assigned to a team yet. Please contact an administrator.</p>
+                            <div class="text-center py-4">
+                                <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">아직 팀에 지정되지 않았습니다. 관리자에게 문의해주세요.</p>
+                            </div>
                         <% } else { %>
                             <div class="row">
                                 <% teamMembers.forEach(member => { %>
@@ -48,14 +86,14 @@
                                                 <h6 class="card-title">
                                                     <%= member.username %>
                                                     <% if (member.id === user.id) { %>
-                                                        <span class="badge bg-primary">You</span>
+                                                        <span class="badge bg-primary">나</span>
                                                     <% } %>
                                                     <% if (member.role === 'team_leader') { %>
-                                                        <span class="badge bg-success">Leader</span>
+                                                        <span class="badge bg-success"><i class="fas fa-crown me-1"></i>리더</span>
                                                     <% } %>
                                                 </h6>
                                                 <p class="card-text">
-                                                    <small class="text-muted">Balance: $<%= member.balance %></small>
+                                                    <small class="text-muted"><i class="fas fa-coins me-1"></i>잔액: $<%= member.balance %></small>
                                                 </p>
                                             </div>
                                         </div>
@@ -64,16 +102,16 @@
                             </div>
                             
                             <div class="mt-4">
-                                <h6>Team Financial Summary</h6>
+                                <h6><i class="fas fa-chart-line me-2"></i>팀 재정 요약</h6>
                                 <div class="row">
                                     <div class="col-md-3">
                                         <div class="card bg-success text-white">
                                             <div class="card-body text-center">
                                                 <h5>$<%= financialData.earned + financialData.received %></h5>
-                                                <small>Total Earned</small>
+                                                <small>총 수입</small>
                                                 <div class="mt-1">
-                                                    <small>Codes: $<%= financialData.earned %></small><br>
-                                                    <small>Donations: $<%= financialData.received %></small>
+                                                    <small>코드: $<%= financialData.earned %></small><br>
+                                                    <small>기부받음: $<%= financialData.received %></small>
                                                 </div>
                                             </div>
                                         </div>
@@ -82,9 +120,9 @@
                                         <div class="card bg-danger text-white">
                                             <div class="card-body text-center">
                                                 <h5>$<%= financialData.spent %></h5>
-                                                <small>Total Spent</small>
+                                                <small>총 지출</small>
                                                 <div class="mt-1">
-                                                    <small>Purchases</small>
+                                                    <small>구매</small>
                                                 </div>
                                             </div>
                                         </div>
@@ -93,9 +131,9 @@
                                         <div class="card bg-warning text-dark">
                                             <div class="card-body text-center">
                                                 <h5>$<%= financialData.donated %></h5>
-                                                <small>Total Donated</small>
+                                                <small>총 기부</small>
                                                 <div class="mt-1">
-                                                    <small>To Other Teams</small>
+                                                    <small>다른 팀에게</small>
                                                 </div>
                                             </div>
                                         </div>
@@ -104,9 +142,9 @@
                                         <div class="card bg-primary text-white">
                                             <div class="card-body text-center">
                                                 <h5>$<%= financialData.currentBalance %></h5>
-                                                <small>Current Balance</small>
+                                                <small>현재 잔액</small>
                                                 <div class="mt-1">
-                                                    <small>Available Now</small>
+                                                    <small>사용 가능</small>
                                                 </div>
                                             </div>
                                         </div>
@@ -115,7 +153,7 @@
                             </div>
                             
                             <div class="mt-4">
-                                <h6>Team Members</h6>
+                                <h6><i class="fas fa-users me-2"></i>팀원</h6>
                                 <div class="row">
                                     <div class="col-md-4">
                                         <div class="card bg-light">
